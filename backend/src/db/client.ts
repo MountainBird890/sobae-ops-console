@@ -1,0 +1,24 @@
+import { Pool } from 'pg'
+
+let pool: Pool | undefined
+
+export class DatabaseNotConfiguredError extends Error {
+  constructor() {
+    super('DATABASE_URL is not set')
+    this.name = 'DatabaseNotConfiguredError'
+  }
+}
+
+// Must connect as the sobae_ops_executor role, which only has EXECUTE on the
+// fn_* SECURITY DEFINER functions and SELECT on v_organization_summary — no
+// direct table DML. See sobae_lifecycle_management_design_doc.md.
+export function getPool(): Pool {
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    throw new DatabaseNotConfiguredError()
+  }
+  if (!pool) {
+    pool = new Pool({ connectionString })
+  }
+  return pool
+}
