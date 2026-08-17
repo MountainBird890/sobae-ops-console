@@ -1,6 +1,9 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 import { Dashboard } from './pages/Dashboard'
 import { OrganizationList } from './pages/OrganizationList'
+import { Login } from './pages/Login'
+import { RequireAuth } from './components/RequireAuth'
+import { useAuth } from './hooks/useAuth'
 
 const navLinkStyle = ({ isActive }: { isActive: boolean }) => ({
   padding: '0.5rem 0.75rem',
@@ -9,11 +12,23 @@ const navLinkStyle = ({ isActive }: { isActive: boolean }) => ({
   fontWeight: isActive ? 700 : 400,
 })
 
-function App() {
+function Header() {
+  const { session, signOut } = useAuth()
+
   return (
-    <div style={{ fontFamily: 'sans-serif', maxWidth: '960px', margin: '0 auto', padding: '1.5rem' }}>
-      <header style={{ marginBottom: '1.5rem' }}>
+    <header style={{ marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h2 style={{ margin: 0 }}>Sobae Ops Console</h2>
+        {session && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem' }}>
+            <span>{session.user.email}</span>
+            <button type="button" onClick={() => signOut()} style={{ padding: '0.3rem 0.6rem' }}>
+              ログアウト
+            </button>
+          </div>
+        )}
+      </div>
+      {session && (
         <nav style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
           <NavLink to="/" end style={navLinkStyle}>
             ダッシュボード
@@ -22,12 +37,23 @@ function App() {
             事業所一覧
           </NavLink>
         </nav>
-      </header>
+      )}
+    </header>
+  )
+}
+
+function App() {
+  return (
+    <div style={{ fontFamily: 'sans-serif', maxWidth: '960px', margin: '0 auto', padding: '1.5rem' }}>
+      <Header />
 
       <main>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/organizations" element={<OrganizationList />} />
+          <Route path="/login" element={<Login />} />
+          <Route element={<RequireAuth />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/organizations" element={<OrganizationList />} />
+          </Route>
         </Routes>
       </main>
     </div>
