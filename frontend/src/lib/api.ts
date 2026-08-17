@@ -62,3 +62,7 @@ export function fetchOrganizations(params: { status?: OrganizationStatus; q?: st
 export function fetchOrganizationSummary() {
   return request<OrganizationSummary>('/api/organizations/summary')
 }
+
+export function fetchOrganization(id: string) {
+  return request<{ organization: Organization }>(`/api/organizations/${encodeURIComponent(id)}`)
+}

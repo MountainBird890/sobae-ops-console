@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
 import { Dashboard } from './pages/Dashboard'
 import { OrganizationList } from './pages/OrganizationList'
+import { OrganizationDetail } from './pages/OrganizationDetail'
 import { Login } from './pages/Login'
 import { RequireAuth } from './components/RequireAuth'
 import { useAuth } from './hooks/useAuth'
@@ -53,6 +54,7 @@ function App() {
           <Route element={<RequireAuth />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/organizations" element={<OrganizationList />} />
+            <Route path="/organizations/:id" element={<OrganizationDetail />} />
           </Route>
         </Routes>
       </main>

@@ -79,4 +79,29 @@ organizations.get('/summary', async (c) => {
   }
 })
 
+organizations.get('/:id', zValidator('param', z.object({ id: z.uuid() })), async (c) => {
+  const { id } = c.req.valid('param')
+
+  try {
+    const pool = getPool()
+    const { rows } = await pool.query<OrganizationSummaryRow>(
+      `select id, name, management_number, status, contract_start_date, contract_end_date
+       from v_organization_summary
+       where id = $1`,
+      [id],
+    )
+    const organization = rows[0]
+    if (!organization) {
+      return c.json({ error: 'not_found', message: 'Organization not found.' }, 404)
+    }
+    return c.json({ organization })
+  } catch (err) {
+    if (err instanceof DatabaseNotConfiguredError) {
+      return c.json({ error: 'database_not_configured', message: 'Database connection is not configured yet.' }, 503)
+    }
+    console.error('Failed to fetch organization', err)
+    return c.json({ error: 'internal_error', message: 'Failed to load organization.' }, 500)
+  }
+})
+
 export default organizations

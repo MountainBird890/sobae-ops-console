@@ -57,6 +57,7 @@ npm run typecheck    # tsc --noEmit
 | GET | `/health` | 疎通確認。`{"status":"ok"}` |
 | GET | `/api/organizations` | 事業所一覧（`?status=active\|suspended\|terminated`, `?q=検索語`） |
 | GET | `/api/organizations/summary` | ダッシュボード用件数集計（active/suspended/terminated/total） |
+| GET | `/api/organizations/:id` | 事業所詳細1件。`id`はUUID形式必須（不正なら400）、存在しなければ404 |
 
 いずれも `v_organization_summary` ビューを参照する実装だが、**このビューはまだ存在しない**（DBロール・関数・ビュー設計は設計書のRACI表よりShimoさんの担当）。ビュー未作成／`DATABASE_URL`未設定の間は `503 {"error":"database_not_configured"}` を返す。`routes/organizations.ts` 内のコメントに、コードが前提としている列構成（`id`, `name`, `management_number`, `status`, `contract_start_date`, `contract_end_date`）を明記している。実際のビュー作成時に形が異なる場合はどちらかを調整する。
 
