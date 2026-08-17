@@ -5,7 +5,8 @@
     "node": ">=24 <25"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.9.0",
@@ -16,6 +17,7 @@
   "devDependencies": {
     "@types/node": "^26.1.1",
     "@types/pg": "^8.21.0",
+    "oxlint": "~1.75.0",
     "tsx": "^4.23.0",
     "typescript": "~6.0.2"
   },
