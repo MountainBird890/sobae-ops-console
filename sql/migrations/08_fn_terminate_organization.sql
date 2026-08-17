@@ -1,13 +1,13 @@
--- Terminates a contract. Legal from 'active' or 'suspended'; 'terminated' is
--- a terminal state so an already-terminated organization is rejected (no
--- terminated -> anything transition exists, by design).
--- Requires: organization_columns.sql, contract_lifecycle_log.sql.
+-- 目的：active/suspendedな事業所をterminatedへ遷移させるSECURITY DEFINER関数。
+--       terminatedは終端状態であり、既にterminatedな事業所への操作は拒否する
+--       （terminated→他状態への遷移は一切存在しない）。
+-- 作成日：2026-08-17
+-- 依存する既存オブジェクト：01_roles.sql, 02_organization_alter.sql, 03_contract_lifecycle_log.sql
+-- ロールバック方針：drop function if exists fn_terminate_organization(uuid, text, text, date);
 --
--- p_contract_end_date lets the caller set an arbitrary termination date
--- (e.g. "end of next month" decided at the time of the operation). Falls
--- back to the organization's existing contract_end_date if omitted, and
--- only defaults to today if neither is set — an explicit argument always
--- wins over whatever was already on the row.
+-- p_contract_end_date は任意の契約終了日を明示指定できるようにするための引数
+-- （例：「来月末で終了」のようにその時点で決めた日付）。省略時は既存のcontract_end_date、
+-- それも無ければ当日にフォールバックする — 明示的に渡した値が常に既存値より優先される。
 
 create or replace function fn_terminate_organization(
   p_organization_id uuid,
@@ -59,3 +59,5 @@ begin
   return query select p_organization_id, 'terminated'::text, v_log_id;
 end;
 $$;
+
+grant execute on function fn_terminate_organization(uuid, text, text, date) to sobae_ops_executor;
