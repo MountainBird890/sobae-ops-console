@@ -60,6 +60,8 @@ npm run typecheck    # tsc --noEmit
 
 いずれも `v_organization_summary` ビューを参照する実装だが、**このビューはまだ存在しない**（DBロール・関数・ビュー設計は設計書のRACI表よりShimoさんの担当）。ビュー未作成／`DATABASE_URL`未設定の間は `503 {"error":"database_not_configured"}` を返す。`routes/organizations.ts` 内のコメントに、コードが前提としている列構成（`id`, `name`, `management_number`, `status`, `contract_start_date`, `contract_end_date`）を明記している。実際のビュー作成時に形が異なる場合はどちらかを調整する。
 
+`/api/*` は認証必須（`auth/middleware.ts`）。`Authorization: Bearer <Supabase access token>` を要求し、`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` 未設定時は `503 {"error":"auth_not_configured"}`、トークン欠落・不正時は `401 {"error":"unauthorized"}` を返す（fail-closed）。`/health` のみ認証不要。
+
 ## 環境変数
 
 `frontend/.env.example`・`backend/.env.example` を参照し、それぞれ `.env.local` にコピーして実値を設定する。実値はGitにコミットしない。
@@ -77,7 +79,9 @@ npm run typecheck    # tsc --noEmit
 
 ## Supabase
 
-Production Supabaseプロジェクトが既に存在する（本体 Sobae_Works と共有）。Staging/Preview用のSupabaseプロジェクトの要否は未整理。今回の環境構築では実際の接続は行っていない。
+Production Supabaseプロジェクトが既に存在する（本体 Sobae_Works と共有）。Staging/Preview用のSupabaseプロジェクトの要否は未整理。実際の接続はまだ行っていない。
+
+ログイン画面（`frontend/src/pages/Login.tsx`, SEC-001）・認証状態管理（`contexts/AuthContext.tsx`）・保護ルート（`components/RequireAuth.tsx`）・backend側トークン検証（`backend/src/auth/middleware.ts`）は実装済みだが、`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`/`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` が未設定の間は「未設定」表示・`503`応答で安全側に倒れる作りになっている。ログイン方式はメール＋パスワードのみ（自己サインアップUIなし。許可リスト方式のため、アカウントは別途Supabase側で払い出す前提）。実際のログイン動作は実接続後に確認が必要。
 
 ## Vercel
 

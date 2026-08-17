@@ -1,3 +1,5 @@
+import { supabase } from './supabase'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined
 
 export class ApiError extends Error {
@@ -15,7 +17,12 @@ async function request<T>(path: string): Promise<T> {
     throw new ApiError('VITE_API_BASE_URL is not configured', 0)
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`)
+  const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } }
+  const accessToken = data.session?.access_token
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+  })
   const body = await res.json().catch(() => undefined)
 
   if (!res.ok) {
