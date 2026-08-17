@@ -31,7 +31,7 @@ grant execute on function fn_dryrun_onboarding(jsonb, text) to sobae_ops_executo
 grant execute on function fn_apply_onboarding(jsonb, text) to sobae_ops_executor;
 grant execute on function fn_suspend_organization(uuid, text, text) to sobae_ops_executor;
 grant execute on function fn_reactivate_organization(uuid, text, text) to sobae_ops_executor;
-grant execute on function fn_terminate_organization(uuid, text, text) to sobae_ops_executor;
+grant execute on function fn_terminate_organization(uuid, text, text, date) to sobae_ops_executor;
 
 grant select on v_organization_summary to sobae_ops_executor;
 

@@ -3,15 +3,17 @@
 -- terminated -> anything transition exists, by design).
 -- Requires: organization_columns.sql, contract_lifecycle_log.sql.
 --
--- Judgment call to review: sets contract_end_date to today if it isn't
--- already set. The design doc doesn't say whether termination should stamp
--- contract_end_date automatically or require it as an explicit input —
--- adjust (e.g. take it as a parameter instead) if that's wrong.
+-- p_contract_end_date lets the caller set an arbitrary termination date
+-- (e.g. "end of next month" decided at the time of the operation). Falls
+-- back to the organization's existing contract_end_date if omitted, and
+-- only defaults to today if neither is set — an explicit argument always
+-- wins over whatever was already on the row.
 
 create or replace function fn_terminate_organization(
   p_organization_id uuid,
   p_reason text,
-  p_applied_by text
+  p_applied_by text,
+  p_contract_end_date date default null
 )
 returns table (
   organization_id uuid,
@@ -43,7 +45,7 @@ begin
 
   update organization
   set status = 'terminated',
-      contract_end_date = coalesce(contract_end_date, current_date)
+      contract_end_date = coalesce(p_contract_end_date, contract_end_date, current_date)
   where id = p_organization_id;
 
   insert into contract_lifecycle_log (
