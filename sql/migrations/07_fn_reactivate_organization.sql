@@ -1,7 +1,9 @@
--- Reactivates a suspended organization. Only 'suspended' -> 'active' is
--- legal; a 'terminated' organization can never be reactivated (terminal
--- state per the design doc — re-contracting is a brand new onboarding, not
--- a status flip). Requires: organization_columns.sql, contract_lifecycle_log.sql.
+-- 目的：suspendedな事業所をactiveへ遷移させるSECURITY DEFINER関数。suspended以外
+--       （terminated含む）からの遷移は拒否する。terminatedは終端状態であり、再契約は
+--       新規オンボーディングとして扱う（設計書の方針、ステータスの巻き戻しはしない）。
+-- 作成日：2026-08-17
+-- 依存する既存オブジェクト：01_roles.sql, 02_organization_alter.sql, 03_contract_lifecycle_log.sql
+-- ロールバック方針：drop function if exists fn_reactivate_organization(uuid, text, text);
 
 create or replace function fn_reactivate_organization(
   p_organization_id uuid,
@@ -51,3 +53,5 @@ begin
   return query select p_organization_id, 'active'::text, v_log_id;
 end;
 $$;
+
+grant execute on function fn_reactivate_organization(uuid, text, text) to sobae_ops_executor;

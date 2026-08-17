@@ -1,6 +1,9 @@
--- Creates organization + office(s) + services + initial admin staff/"system_user"
--- as one atomic operation, and logs it. Requires: organization_columns.sql,
--- contract_lifecycle_log.sql already applied.
+-- 目的：organization + office(s) + services + 初期admin(staff/"system_user") を
+--       1トランザクションで作成し、contract_lifecycle_logへ記録するSECURITY DEFINER関数。
+-- 作成日：2026-08-17
+-- 依存する既存オブジェクト：01_roles.sql, 02_organization_alter.sql, 03_contract_lifecycle_log.sql
+-- ロールバック方針：drop function if exists fn_apply_onboarding(jsonb, text);
+--   （実行するとsobae_ops_executorのEXECUTE権限も自動的に失われる）
 --
 -- DRAFT PAYLOAD CONTRACT — there is no backend/src/schema/application.ts yet
 -- to be the actual source of truth, so this function currently defines the
@@ -130,3 +133,5 @@ begin
   return jsonb_build_object('organization_id', v_organization_id, 'log_id', v_log_id);
 end;
 $$;
+
+grant execute on function fn_apply_onboarding(jsonb, text) to sobae_ops_executor;
