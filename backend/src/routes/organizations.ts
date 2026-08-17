@@ -1,13 +1,9 @@
 import { Hono } from 'hono'
 import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
-import { DatabaseNotConfiguredError, getPool } from '../db/client.js'
+import { DatabaseNotConfiguredError, getSql } from '../db/client.js'
 
-// Shape this route expects from v_organization_summary. That view does not
-// exist yet (DB role/function/view design is owned by Shimo, not this repo's
-// backend code — see design doc RACI table). Columns below are taken from the
-// ORGANIZATION entity in the design doc's ER diagram; confirm against the
-// real view once it's created and adjust this file if the shape differs.
+// Shape this route expects from v_organization_summary (see sql/v_organization_summary.sql).
 const ORGANIZATION_STATUSES = ['active', 'suspended', 'terminated'] as const
 
 interface OrganizationSummaryRow {
@@ -30,15 +26,18 @@ organizations.get('/', zValidator('query', listQuerySchema), async (c) => {
   const { status, q } = c.req.valid('query')
 
   try {
-    const pool = getPool()
-    const { rows } = await pool.query<OrganizationSummaryRow>(
-      `select id, name, management_number, status, contract_start_date, contract_end_date
-       from v_organization_summary
-       where ($1::text is null or status = $1)
-         and ($2::text is null or name ilike '%' || $2 || '%' or management_number ilike '%' || $2 || '%')
-       order by contract_start_date desc`,
-      [status ?? null, q ?? null],
-    )
+    const sql = getSql()
+    const rows = await sql<OrganizationSummaryRow[]>`
+      select id, name, management_number, status, contract_start_date, contract_end_date
+      from v_organization_summary
+      where (${status ?? null}::text is null or status = ${status ?? null})
+        and (
+          ${q ?? null}::text is null
+          or name ilike '%' || ${q ?? null} || '%'
+          or management_number ilike '%' || ${q ?? null} || '%'
+        )
+      order by contract_start_date desc
+    `
     return c.json({ organizations: rows })
   } catch (err) {
     if (err instanceof DatabaseNotConfiguredError) {
@@ -51,10 +50,10 @@ organizations.get('/', zValidator('query', listQuerySchema), async (c) => {
 
 organizations.get('/summary', async (c) => {
   try {
-    const pool = getPool()
-    const { rows } = await pool.query<{ status: string; count: string }>(
-      `select status, count(*) as count from v_organization_summary group by status`,
-    )
+    const sql = getSql()
+    const rows = await sql<{ status: string; count: string }[]>`
+      select status, count(*) as count from v_organization_summary group by status
+    `
 
     const counts: Record<(typeof ORGANIZATION_STATUSES)[number], number> = {
       active: 0,
@@ -83,13 +82,12 @@ organizations.get('/:id', zValidator('param', z.object({ id: z.uuid() })), async
   const { id } = c.req.valid('param')
 
   try {
-    const pool = getPool()
-    const { rows } = await pool.query<OrganizationSummaryRow>(
-      `select id, name, management_number, status, contract_start_date, contract_end_date
-       from v_organization_summary
-       where id = $1`,
-      [id],
-    )
+    const sql = getSql()
+    const rows = await sql<OrganizationSummaryRow[]>`
+      select id, name, management_number, status, contract_start_date, contract_end_date
+      from v_organization_summary
+      where id = ${id}
+    `
     const organization = rows[0]
     if (!organization) {
       return c.json({ error: 'not_found', message: 'Organization not found.' }, 404)
