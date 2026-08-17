@@ -1,6 +1,16 @@
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import organizations from './routes/organizations.js'
 
 const app = new Hono()
+
+const allowedOrigin = process.env.ALLOWED_ORIGIN
+app.use(
+  '/api/*',
+  cors({
+    origin: allowedOrigin ? allowedOrigin.split(',').map((origin) => origin.trim()) : [],
+  }),
+)
 
 const welcomeStrings = [
   'Hello Hono!',
@@ -14,5 +24,7 @@ app.get('/', (c) => {
 app.get('/health', (c) => {
   return c.json({ status: 'ok' })
 })
+
+app.route('/api/organizations', organizations)
 
 export default app

@@ -30,6 +30,7 @@ cd ../backend && npm install
 
 ```bash
 cd frontend
+cp .env.example .env.local   # VITE_API_BASE_URL=http://localhost:3000 等を設定
 npm run dev        # http://localhost:5173
 npm run build       # tsc -b && vite build
 npm run lint         # oxlint
@@ -49,12 +50,30 @@ npm run typecheck    # tsc --noEmit
 
 補足：`backend/package.json` の `devDependencies.typescript` は `~6.0.2` に固定している。TypeScript 7.0.2（npm の `latest`）は現時点の `@vercel/hono` ビルダーと非互換で、`vercel build` が `TS2688: Cannot find type definition file for 'node'` で失敗することを確認済み。
 
+## backend API
+
+| メソッド | パス | 概要 |
+| --- | --- | --- |
+| GET | `/health` | 疎通確認。`{"status":"ok"}` |
+| GET | `/api/organizations` | 事業所一覧（`?status=active\|suspended\|terminated`, `?q=検索語`） |
+| GET | `/api/organizations/summary` | ダッシュボード用件数集計（active/suspended/terminated/total） |
+
+いずれも `v_organization_summary` ビューを参照する実装だが、**このビューはまだ存在しない**（DBロール・関数・ビュー設計は設計書のRACI表よりShimoさんの担当）。ビュー未作成／`DATABASE_URL`未設定の間は `503 {"error":"database_not_configured"}` を返す。`routes/organizations.ts` 内のコメントに、コードが前提としている列構成（`id`, `name`, `management_number`, `status`, `contract_start_date`, `contract_end_date`）を明記している。実際のビュー作成時に形が異なる場合はどちらかを調整する。
+
 ## 環境変数
 
 `frontend/.env.example`・`backend/.env.example` を参照し、それぞれ `.env.local` にコピーして実値を設定する。実値はGitにコミットしない。
 
 - frontendは `VITE_` prefixのついた変数のみブラウザに公開される想定。service_role key等の秘密情報を `VITE_` 変数として定義しないこと。
 - backend用の実際に必要な環境変数（DB接続方式含む）は、`db/client.ts` 実装時に確定する。現時点ではプレースホルダーのみ。
+- **重要**：backend（`vercel dev`）はNext.js系アプリと異なり、ルート直下に手で置いた `.env.local` を読み込まない（実測で確認済み）。ローカルでbackendの環境変数（例：`ALLOWED_ORIGIN`）を効かせるには、Vercelプロジェクトに登録する必要がある。
+
+  ```bash
+  cd backend
+  printf 'http://localhost:5173' | vercel env add ALLOWED_ORIGIN development
+  ```
+
+  frontend側（Vite）はルート直下の `.env.local` を通常どおり読み込む。
 
 ## Supabase
 
