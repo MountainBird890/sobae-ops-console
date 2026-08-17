@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ApiError, fetchOrganizations, type Organization, type OrganizationStatus } from '../lib/api'
 import { StatusBadge } from '../components/StatusBadge'
 
@@ -78,7 +79,9 @@ export function OrganizationList() {
           <tbody>
             {organizations.map((org) => (
               <tr key={org.id} style={{ borderBottom: '1px solid #eceef1' }}>
-                <td style={{ padding: '0.5rem' }}>{org.name}</td>
+                <td style={{ padding: '0.5rem' }}>
+                  <Link to={`/organizations/${org.id}`}>{org.name}</Link>
+                </td>
                 <td style={{ padding: '0.5rem' }}>{org.management_number}</td>
                 <td style={{ padding: '0.5rem' }}>
                   <StatusBadge status={org.status} />
