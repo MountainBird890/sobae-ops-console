@@ -9,10 +9,10 @@ let adminClient: ReturnType<typeof createClient> | undefined
 
 function getAdminClient() {
   const url = process.env.SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceRoleKey) return null
+  const secretKey = process.env.SUPABASE_SECRET_KEY
+  if (!url || !secretKey) return null
   if (!adminClient) {
-    adminClient = createClient(url, serviceRoleKey)
+    adminClient = createClient(url, secretKey)
   }
   return adminClient
 }
