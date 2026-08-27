@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import { Dashboard } from './pages/Dashboard'
 import { OrganizationList } from './pages/OrganizationList'
 import { OrganizationDetail } from './pages/OrganizationDetail'
+import { Onboarding } from './pages/Onboarding'
 import { Login } from './pages/Login'
 import { RequireAuth } from './components/RequireAuth'
 import { useAuth } from './hooks/useAuth'
@@ -37,6 +38,9 @@ function Header() {
           <NavLink to="/organizations" style={navLinkStyle}>
             事業所一覧
           </NavLink>
+          <NavLink to="/onboarding" style={navLinkStyle}>
+            新規契約登録
+          </NavLink>
         </nav>
       )}
     </header>
@@ -55,6 +59,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/organizations" element={<OrganizationList />} />
             <Route path="/organizations/:id" element={<OrganizationDetail />} />
+            <Route path="/onboarding" element={<Onboarding />} />
           </Route>
         </Routes>
       </main>
