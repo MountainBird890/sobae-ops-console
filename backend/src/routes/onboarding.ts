@@ -113,7 +113,12 @@ function applyErrorResponse(err: unknown): { body: { error: string; message: str
     if (err.code === '23505') {
       return { body: { error: 'conflict', message: err.message }, status: 409 }
     }
-    if (err.code === '22023') {
+    // Class 22 (data exception, e.g. fn_apply_onboarding's own 22023 checks,
+    // or a plain column-constraint violation like a too-long value) and the
+    // rest of class 23 (integrity constraint violation, e.g. a NOT NULL or
+    // CHECK failure) both mean the submitted payload was invalid, not that
+    // the server is broken.
+    if (err.code?.startsWith('22') || err.code?.startsWith('23')) {
       return { body: { error: 'invalid_payload', message: err.message }, status: 400 }
     }
   }
