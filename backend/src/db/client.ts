@@ -18,7 +18,12 @@ export function getSql(): postgres.Sql {
     throw new DatabaseNotConfiguredError()
   }
   if (!sql) {
-    sql = postgres(connectionString)
+    // prepare: false — DATABASE_URL may point at Supabase's pooled connection
+    // (PgBouncer/Supavisor in transaction mode), which doesn't guarantee a
+    // prepared statement survives across queries on the same logical
+    // connection. Without this, queries intermittently fail with "prepared
+    // statement ... does not exist" (SQLSTATE 26000).
+    sql = postgres(connectionString, { prepare: false })
   }
   return sql
 }
