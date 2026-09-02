@@ -4,6 +4,8 @@ import { OrganizationList } from './pages/OrganizationList'
 import { OrganizationDetail } from './pages/OrganizationDetail'
 import { Onboarding } from './pages/Onboarding'
 import { Login } from './pages/Login'
+import { AcceptInvite } from './pages/AcceptInvite'
+import { InviteStaff } from './pages/InviteStaff'
 import { RequireAuth } from './components/RequireAuth'
 import { useAuth } from './hooks/useAuth'
 
@@ -41,6 +43,9 @@ function Header() {
           <NavLink to="/onboarding" style={navLinkStyle}>
             新規契約登録
           </NavLink>
+          <NavLink to="/staff/invite" style={navLinkStyle}>
+            スタッフ招待
+          </NavLink>
         </nav>
       )}
     </header>
@@ -55,11 +60,13 @@ function App() {
       <main>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/accept-invite" element={<AcceptInvite />} />
           <Route element={<RequireAuth />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/organizations" element={<OrganizationList />} />
             <Route path="/organizations/:id" element={<OrganizationDetail />} />
             <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/staff/invite" element={<InviteStaff />} />
           </Route>
         </Routes>
       </main>
