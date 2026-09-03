@@ -7,7 +7,7 @@ export interface AuthVariables {
 
 let adminClient: ReturnType<typeof createClient> | undefined
 
-function getAdminClient() {
+export function getAdminClient() {
   const url = process.env.SUPABASE_URL
   const secretKey = process.env.SUPABASE_SECRET_KEY
   if (!url || !secretKey) return null
