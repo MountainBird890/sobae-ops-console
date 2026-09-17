@@ -255,6 +255,7 @@ onboarding.post('/dry-run', zValidator('json', onboardingPayloadSchema, zodField
     `
     const result = rows[0].result
     if (!result.valid) {
+      console.error('fn_dryrun_onboarding returned invalid', result.errors)
       return c.json({ ...result, errors: result.errors.map(friendlyDbMessage) })
     }
     return c.json(result)
