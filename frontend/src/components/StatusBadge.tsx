@@ -6,26 +6,15 @@ const LABELS: Record<OrganizationStatus, string> = {
   terminated: '契約終了',
 }
 
-const COLORS: Record<OrganizationStatus, { background: string; color: string }> = {
-  active: { background: '#e3f5e9', color: '#1e7a3d' },
-  suspended: { background: '#fdf1dc', color: '#9a6400' },
-  terminated: { background: '#eceef1', color: '#5b6470' },
+const COLOR_CLASSES: Record<OrganizationStatus, string> = {
+  active: 'bg-green-100 text-green-700',
+  suspended: 'bg-amber-100 text-amber-700',
+  terminated: 'bg-slate-100 text-slate-600',
 }
 
 export function StatusBadge({ status }: { status: OrganizationStatus }) {
-  const { background, color } = COLORS[status]
   return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '0.15rem 0.6rem',
-        borderRadius: '999px',
-        fontSize: '0.8rem',
-        fontWeight: 600,
-        background,
-        color,
-      }}
-    >
+    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${COLOR_CLASSES[status]}`}>
       {LABELS[status]}
     </span>
   )

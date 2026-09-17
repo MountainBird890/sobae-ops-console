@@ -25,17 +25,17 @@ export function Login() {
   }
 
   return (
-    <div style={{ maxWidth: '320px', margin: '4rem auto' }}>
-      <h1 style={{ fontSize: '1.25rem' }}>Sobae Ops Console</h1>
+    <div className="mx-auto mt-16 max-w-xs">
+      <h1 className="text-xl font-medium text-slate-900">Sobae Ops Console</h1>
 
       {!configured && (
-        <p role="alert" style={{ color: '#b3261e' }}>
+        <p role="alert" className="text-red-600">
           Supabaseが未設定のため、ログインできません。管理者に環境変数の設定を確認してください。
         </p>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <label>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <label className="flex flex-col gap-1 text-sm text-slate-700">
           メールアドレス
           <input
             type="email"
@@ -43,10 +43,10 @@ export function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={!configured}
-            style={{ display: 'block', width: '100%', padding: '0.4rem 0.6rem' }}
+            className="block w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
           />
         </label>
-        <label>
+        <label className="flex flex-col gap-1 text-sm text-slate-700">
           パスワード
           <input
             type="password"
@@ -54,13 +54,21 @@ export function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={!configured}
-            style={{ display: 'block', width: '100%', padding: '0.4rem 0.6rem' }}
+            className="block w-full rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
           />
         </label>
 
-        {error && <p role="alert" style={{ color: '#b3261e' }}>{error}</p>}
+        {error && (
+          <p role="alert" className="text-red-600">
+            {error}
+          </p>
+        )}
 
-        <button type="submit" disabled={!configured || submitting} style={{ padding: '0.5rem' }}>
+        <button
+          type="submit"
+          disabled={!configured || submitting}
+          className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
           {submitting ? 'ログイン中…' : 'ログイン'}
         </button>
       </form>
