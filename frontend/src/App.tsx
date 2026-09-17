@@ -44,7 +44,7 @@ function Header() {
           <NavLink to="/onboarding" className={navLinkClassName}>
             新規契約登録
           </NavLink>
-          <NavLink to="/staff/invite" style={navLinkStyle}>
+          <NavLink to="/staff/invite" className={navLinkClassName}>
             スタッフ招待
           </NavLink>
         </nav>
