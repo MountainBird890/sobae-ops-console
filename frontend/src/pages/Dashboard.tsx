@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { ApiError, fetchOrganizationSummary, type OrganizationSummary } from '../lib/api'
 
-const CARDS: { key: keyof OrganizationSummary; label: string; color: string }[] = [
-  { key: 'total', label: '契約事業所数', color: '#3454d1' },
-  { key: 'active', label: '有効', color: '#1e7a3d' },
-  { key: 'suspended', label: '利用停止中', color: '#9a6400' },
-  { key: 'terminated', label: '契約終了', color: '#5b6470' },
+const CARDS: { key: keyof OrganizationSummary; label: string; colorClassName: string }[] = [
+  { key: 'total', label: '契約事業所数', colorClassName: 'text-blue-600' },
+  { key: 'active', label: '有効', colorClassName: 'text-green-600' },
+  { key: 'suspended', label: '利用停止中', colorClassName: 'text-amber-600' },
+  { key: 'terminated', label: '契約終了', colorClassName: 'text-slate-500' },
 ]
 
 export function Dashboard() {
@@ -37,17 +37,21 @@ export function Dashboard() {
 
   return (
     <div>
-      <h1>ダッシュボード</h1>
+      <h1 className="text-2xl font-medium text-slate-900">ダッシュボード</h1>
 
-      {loading && <p>読み込み中…</p>}
-      {error && <p role="alert" style={{ color: '#b3261e' }}>{error}</p>}
+      {loading && <p className="text-slate-500">読み込み中…</p>}
+      {error && (
+        <p role="alert" className="text-red-600">
+          {error}
+        </p>
+      )}
 
       {summary && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
-          {CARDS.map(({ key, label, color }) => (
-            <div key={key} style={{ border: '1px solid #d9dce1', borderRadius: '8px', padding: '1rem' }}>
-              <div style={{ fontSize: '0.85rem', color: '#5b6470' }}>{label}</div>
-              <div style={{ fontSize: '2rem', fontWeight: 700, color }}>{summary[key]}</div>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
+          {CARDS.map(({ key, label, colorClassName }) => (
+            <div key={key} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="text-sm text-slate-500">{label}</div>
+              <div className={`text-3xl font-bold ${colorClassName}`}>{summary[key]}</div>
             </div>
           ))}
         </div>

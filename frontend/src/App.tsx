@@ -8,42 +8,43 @@ import { AcceptInvite } from './pages/AcceptInvite'
 import { InviteStaff } from './pages/InviteStaff'
 import { RequireAuth } from './components/RequireAuth'
 import { useAuth } from './hooks/useAuth'
+import { InstallPrompt } from './install/InstallPrompt'
 
-const navLinkStyle = ({ isActive }: { isActive: boolean }) => ({
-  padding: '0.5rem 0.75rem',
-  textDecoration: 'none',
-  color: isActive ? '#3454d1' : '#1a1a1a',
-  fontWeight: isActive ? 700 : 400,
-})
+const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
+  `rounded px-3 py-2 text-sm ${isActive ? 'font-semibold text-white' : 'text-slate-400 hover:text-slate-200'}`
 
 function Header() {
   const { session, signOut } = useAuth()
 
   return (
-    <header style={{ marginBottom: '1.5rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h2 style={{ margin: 0 }}>Sobae Ops Console</h2>
+    <header className="bg-slate-900">
+      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
+        <h2 className="m-0 text-lg font-medium text-white">Sobae Ops Console</h2>
         {session && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.85rem' }}>
+          <div className="flex items-center gap-3 text-sm text-slate-300">
             <span>{session.user.email}</span>
-            <button type="button" onClick={() => signOut()} style={{ padding: '0.3rem 0.6rem' }}>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="rounded border border-slate-600 px-2.5 py-1 text-slate-200 hover:bg-slate-800"
+            >
               ログアウト
             </button>
           </div>
         )}
       </div>
       {session && (
-        <nav style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-          <NavLink to="/" end style={navLinkStyle}>
+        <nav className="mx-auto flex max-w-5xl gap-1 px-6 pb-2">
+          <NavLink to="/" end className={navLinkClassName}>
             ダッシュボード
           </NavLink>
-          <NavLink to="/organizations" style={navLinkStyle}>
+          <NavLink to="/organizations" className={navLinkClassName}>
             事業所一覧
           </NavLink>
-          <NavLink to="/onboarding" style={navLinkStyle}>
+          <NavLink to="/onboarding" className={navLinkClassName}>
             新規契約登録
           </NavLink>
-          <NavLink to="/staff/invite" style={navLinkStyle}>
+          <NavLink to="/staff/invite" className={navLinkClassName}>
             スタッフ招待
           </NavLink>
         </nav>
@@ -54,10 +55,12 @@ function Header() {
 
 function App() {
   return (
-    <div style={{ fontFamily: 'sans-serif', maxWidth: '960px', margin: '0 auto', padding: '1.5rem' }}>
+    <div className="min-h-svh bg-slate-50">
       <Header />
 
-      <main>
+      <main className="mx-auto max-w-5xl px-6 py-6">
+        <InstallPrompt />
+
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/accept-invite" element={<AcceptInvite />} />

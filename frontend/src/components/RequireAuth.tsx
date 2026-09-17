@@ -6,7 +6,7 @@ export function RequireAuth() {
   const location = useLocation()
 
   if (loading) {
-    return <p>読み込み中…</p>
+    return <p className="text-sm text-slate-500">読み込み中…</p>
   }
 
   if (!session) {

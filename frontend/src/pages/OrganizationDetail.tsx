@@ -45,29 +45,35 @@ export function OrganizationDetail() {
   return (
     <div>
       <p>
-        <Link to="/organizations">← 事業所一覧に戻る</Link>
+        <Link to="/organizations" className="text-blue-600 hover:underline">
+          ← 事業所一覧に戻る
+        </Link>
       </p>
 
-      {loading && <p>読み込み中…</p>}
-      {error && <p role="alert" style={{ color: '#b3261e' }}>{error}</p>}
+      {loading && <p className="text-slate-500">読み込み中…</p>}
+      {error && (
+        <p role="alert" className="text-red-600">
+          {error}
+        </p>
+      )}
 
       {organization && (
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-            <h1 style={{ margin: 0 }}>{organization.name}</h1>
+          <div className="mb-4 flex items-center gap-3">
+            <h1 className="m-0 text-2xl font-medium text-slate-900">{organization.name}</h1>
             <StatusBadge status={organization.status} />
           </div>
 
-          <dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', columnGap: '1rem', rowGap: '0.5rem' }}>
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
             {FIELDS.map(({ key, label }) => (
-              <div key={key} style={{ display: 'contents' }}>
-                <dt style={{ color: '#5b6470' }}>{label}</dt>
-                <dd style={{ margin: 0 }}>{organization[key] ?? '-'}</dd>
+              <div key={key} className="contents">
+                <dt className="text-slate-500">{label}</dt>
+                <dd className="m-0">{organization[key] ?? '-'}</dd>
               </div>
             ))}
           </dl>
 
-          <p style={{ color: '#5b6470', fontSize: '0.85rem', marginTop: '2rem' }}>
+          <p className="mt-8 text-sm text-slate-500">
             事業所・サービス情報や操作履歴、利用停止/再開/終了操作は未実装です。
           </p>
         </div>
