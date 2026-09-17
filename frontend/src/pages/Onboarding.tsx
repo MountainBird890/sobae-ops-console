@@ -131,22 +131,21 @@ function trimOrUndefined(value: string): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
-const inputStyle = { display: 'block', width: '100%', padding: '0.4rem 0.6rem', boxSizing: 'border-box' as const }
-const fieldStyle = { fontSize: '0.85rem', color: '#3a3f47', display: 'flex', flexDirection: 'column' as const, gap: '0.25rem' }
-const sectionStyle = { border: '1px solid #d9dce1', borderRadius: '6px', padding: '1rem', marginBottom: '1rem' }
-const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }
-const errorColor = '#b3261e'
-const successColor = '#1e7a3d'
+const inputClassName =
+  'block w-full box-border rounded border border-slate-300 px-2.5 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
+const fieldClassName = 'flex flex-col gap-1 text-sm text-slate-700'
+const sectionClassName = 'mb-4 rounded-md border border-slate-200 p-4'
+const gridClassName = 'grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3'
 
 // Renders the message for one payload field (e.g. "organization.postal_code",
 // "offices.0.postal_code") if the backend's fieldErrors map has one. Placed
-// inside each <label> (fieldStyle is a flex column) so it stacks directly
+// inside each <label> (fieldClassName is a flex column) so it stacks directly
 // under that field's input without disturbing the surrounding grid layout.
 function FieldError({ path, fieldErrors }: { path: string; fieldErrors: Record<string, string> }) {
   const message = fieldErrors[path]
   if (!message) return null
   return (
-    <p role="alert" style={{ color: errorColor, fontSize: '0.75rem', margin: 0 }}>
+    <p role="alert" className="m-0 text-xs text-red-600">
       {message}
     </p>
   )
@@ -348,10 +347,12 @@ export function Onboarding() {
   if (applyResult) {
     return (
       <div>
-        <h1>新規契約登録</h1>
-        <p style={{ color: successColor, fontWeight: 600 }}>登録が完了しました。</p>
+        <h1 className="text-2xl font-medium text-slate-900">新規契約登録</h1>
+        <p className="font-semibold text-green-700">登録が完了しました。</p>
         <p>
-          <Link to={`/organizations/${applyResult.organization.organization_id}`}>作成した事業所を見る →</Link>
+          <Link to={`/organizations/${applyResult.organization.organization_id}`} className="text-blue-600 hover:underline">
+            作成した事業所を見る →
+          </Link>
         </p>
       </div>
     )
@@ -359,89 +360,89 @@ export function Onboarding() {
 
   return (
     <div>
-      <h1>新規契約登録</h1>
+      <h1 className="text-2xl font-medium text-slate-900">新規契約登録</h1>
 
-      <section style={sectionStyle}>
-        <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>法人情報</h2>
-        <div style={gridStyle}>
-          <label style={fieldStyle}>
+      <section className={sectionClassName}>
+        <h2 className="mt-0 text-base font-medium text-slate-900">法人情報</h2>
+        <div className={gridClassName}>
+          <label className={fieldClassName}>
             法人名 *
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={organization.name}
               onChange={(e) => setOrganization((prev) => ({ ...prev, name: e.target.value }))}
             />
             <FieldError path="organization.name" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             管理番号 *
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={organization.management_number}
               onChange={(e) => setOrganization((prev) => ({ ...prev, management_number: e.target.value }))}
             />
             <FieldError path="organization.management_number" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             契約開始日 *
             <input
               type="date"
-              style={inputStyle}
+              className={inputClassName}
               value={organization.contract_start_date}
               onChange={(e) => setOrganization((prev) => ({ ...prev, contract_start_date: e.target.value }))}
             />
             <FieldError path="organization.contract_start_date" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             ログインコード
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={organization.login_code}
               onChange={(e) => setOrganization((prev) => ({ ...prev, login_code: e.target.value }))}
             />
             <FieldError path="organization.login_code" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             郵便番号（7桁）
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={organization.postal_code}
               onChange={(e) => setOrganization((prev) => ({ ...prev, postal_code: e.target.value }))}
             />
             <FieldError path="organization.postal_code" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             住所
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={organization.address}
               onChange={(e) => setOrganization((prev) => ({ ...prev, address: e.target.value }))}
             />
             <FieldError path="organization.address" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             電話番号
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={organization.phone}
               onChange={(e) => setOrganization((prev) => ({ ...prev, phone: e.target.value }))}
             />
             <FieldError path="organization.phone" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             FAX番号
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={organization.fax}
               onChange={(e) => setOrganization((prev) => ({ ...prev, fax: e.target.value }))}
             />
             <FieldError path="organization.fax" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             メールアドレス
             <input
               type="email"
-              style={inputStyle}
+              className={inputClassName}
               value={organization.email}
               onChange={(e) => setOrganization((prev) => ({ ...prev, email: e.target.value }))}
             />
@@ -450,94 +451,102 @@ export function Onboarding() {
         </div>
       </section>
 
-      <section style={sectionStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>事業所</h2>
-          <button type="button" onClick={addOffice} style={{ padding: '0.3rem 0.6rem' }}>
+      <section className={sectionClassName}>
+        <div className="flex items-center justify-between">
+          <h2 className="mt-0 text-base font-medium text-slate-900">事業所</h2>
+          <button
+            type="button"
+            onClick={addOffice}
+            className="rounded bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+          >
             + 事業所を追加
           </button>
         </div>
 
         {offices.map((office, officeIndex) => (
-          <div key={officeIndex} style={{ border: '1px solid #eceef1', borderRadius: '6px', padding: '0.75rem', marginBottom: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <strong>事業所 {officeIndex + 1}</strong>
+          <div key={officeIndex} className="mb-3 rounded-md border border-slate-200 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <strong className="text-slate-900">事業所 {officeIndex + 1}</strong>
               {offices.length > 1 && (
-                <button type="button" onClick={() => removeOffice(officeIndex)} style={{ padding: '0.2rem 0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => removeOffice(officeIndex)}
+                  className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                >
                   削除
                 </button>
               )}
             </div>
 
-            <div style={gridStyle}>
-              <label style={fieldStyle}>
+            <div className={gridClassName}>
+              <label className={fieldClassName}>
                 事業所コード *（全事業所で一意）
                 <input
-                  style={inputStyle}
+                  className={inputClassName}
                   value={office.code}
                   onChange={(e) => updateOffice(officeIndex, { code: e.target.value })}
                 />
                 <FieldError path={`offices.${officeIndex}.code`} fieldErrors={fieldErrors} />
               </label>
-              <label style={fieldStyle}>
+              <label className={fieldClassName}>
                 事業所名 *
                 <input
-                  style={inputStyle}
+                  className={inputClassName}
                   value={office.name}
                   onChange={(e) => updateOffice(officeIndex, { name: e.target.value })}
                 />
                 <FieldError path={`offices.${officeIndex}.name`} fieldErrors={fieldErrors} />
               </label>
-              <label style={fieldStyle}>
+              <label className={fieldClassName}>
                 表示名
                 <input
-                  style={inputStyle}
+                  className={inputClassName}
                   value={office.display_name}
                   onChange={(e) => updateOffice(officeIndex, { display_name: e.target.value })}
                 />
                 <FieldError path={`offices.${officeIndex}.display_name`} fieldErrors={fieldErrors} />
               </label>
-              <label style={fieldStyle}>
+              <label className={fieldClassName}>
                 郵便番号（7桁）
                 <input
-                  style={inputStyle}
+                  className={inputClassName}
                   value={office.postal_code}
                   onChange={(e) => updateOffice(officeIndex, { postal_code: e.target.value })}
                 />
                 <FieldError path={`offices.${officeIndex}.postal_code`} fieldErrors={fieldErrors} />
               </label>
-              <label style={fieldStyle}>
+              <label className={fieldClassName}>
                 住所
                 <input
-                  style={inputStyle}
+                  className={inputClassName}
                   value={office.address}
                   onChange={(e) => updateOffice(officeIndex, { address: e.target.value })}
                 />
                 <FieldError path={`offices.${officeIndex}.address`} fieldErrors={fieldErrors} />
               </label>
-              <label style={fieldStyle}>
+              <label className={fieldClassName}>
                 電話番号
                 <input
-                  style={inputStyle}
+                  className={inputClassName}
                   value={office.phone}
                   onChange={(e) => updateOffice(officeIndex, { phone: e.target.value })}
                 />
                 <FieldError path={`offices.${officeIndex}.phone`} fieldErrors={fieldErrors} />
               </label>
-              <label style={fieldStyle}>
+              <label className={fieldClassName}>
                 FAX番号
                 <input
-                  style={inputStyle}
+                  className={inputClassName}
                   value={office.fax}
                   onChange={(e) => updateOffice(officeIndex, { fax: e.target.value })}
                 />
                 <FieldError path={`offices.${officeIndex}.fax`} fieldErrors={fieldErrors} />
               </label>
-              <label style={fieldStyle}>
+              <label className={fieldClassName}>
                 メールアドレス
                 <input
                   type="email"
-                  style={inputStyle}
+                  className={inputClassName}
                   value={office.email}
                   onChange={(e) => updateOffice(officeIndex, { email: e.target.value })}
                 />
@@ -545,19 +554,27 @@ export function Onboarding() {
               </label>
             </div>
 
-            <div style={{ marginTop: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={fieldStyle}>提供サービス</span>
-                <button type="button" onClick={() => addServiceRegistration(officeIndex)} style={{ padding: '0.2rem 0.5rem' }}>
+            <div className="mt-3">
+              <div className="flex items-center justify-between">
+                <span className={fieldClassName}>提供サービス</span>
+                <button
+                  type="button"
+                  onClick={() => addServiceRegistration(officeIndex)}
+                  className="rounded bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                >
                   + サービスを追加
                 </button>
               </div>
-              {serviceTypesError && <p role="alert" style={{ color: errorColor, fontSize: '0.85rem' }}>{serviceTypesError}</p>}
+              {serviceTypesError && (
+                <p role="alert" className="text-sm text-red-600">
+                  {serviceTypesError}
+                </p>
+              )}
 
               {office.service_registrations.map((reg, regIndex) => (
-                <div key={regIndex} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.5rem' }}>
+                <div key={regIndex} className="mt-2 flex items-center gap-2">
                   <select
-                    style={{ ...inputStyle, flex: 2 }}
+                    className={`${inputClassName} flex-[2]`}
                     value={reg.service_code}
                     onChange={(e) => updateServiceRegistration(officeIndex, regIndex, { service_code: e.target.value })}
                   >
@@ -570,17 +587,21 @@ export function Onboarding() {
                   </select>
                   <input
                     placeholder="事業所番号"
-                    style={{ ...inputStyle, flex: 1 }}
+                    className={`${inputClassName} flex-1`}
                     value={reg.provider_number}
                     onChange={(e) => updateServiceRegistration(officeIndex, regIndex, { provider_number: e.target.value })}
                   />
                   <input
                     placeholder="サービス別表示名"
-                    style={{ ...inputStyle, flex: 1 }}
+                    className={`${inputClassName} flex-1`}
                     value={reg.service_office_name}
                     onChange={(e) => updateServiceRegistration(officeIndex, regIndex, { service_office_name: e.target.value })}
                   />
-                  <button type="button" onClick={() => removeServiceRegistration(officeIndex, regIndex)} style={{ padding: '0.3rem 0.5rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => removeServiceRegistration(officeIndex, regIndex)}
+                    className="rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                  >
                     削除
                   </button>
                 </div>
@@ -590,13 +611,13 @@ export function Onboarding() {
         ))}
       </section>
 
-      <section style={sectionStyle}>
-        <h2 style={{ marginTop: 0, fontSize: '1.05rem' }}>初期管理者</h2>
-        <div style={gridStyle}>
-          <label style={fieldStyle}>
+      <section className={sectionClassName}>
+        <h2 className="mt-0 text-base font-medium text-slate-900">初期管理者</h2>
+        <div className={gridClassName}>
+          <label className={fieldClassName}>
             所属事業所 *
             <select
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.office_code}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, office_code: e.target.value }))}
             >
@@ -612,10 +633,10 @@ export function Onboarding() {
             </select>
             <FieldError path="initial_admin.office_code" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             権限 *
             <select
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.role_code}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, role_code: e.target.value as OnboardingRoleCode }))}
             >
@@ -627,46 +648,46 @@ export function Onboarding() {
             </select>
             <FieldError path="initial_admin.role_code" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             姓 *
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.last_name}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, last_name: e.target.value }))}
             />
             <FieldError path="initial_admin.last_name" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             名 *
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.first_name}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, first_name: e.target.value }))}
             />
             <FieldError path="initial_admin.first_name" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             姓（カナ）
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.last_name_kana}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, last_name_kana: e.target.value }))}
             />
             <FieldError path="initial_admin.last_name_kana" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             名（カナ）
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.first_name_kana}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, first_name_kana: e.target.value }))}
             />
             <FieldError path="initial_admin.first_name_kana" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             雇用形態
             <select
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.employment_type}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, employment_type: e.target.value }))}
             >
@@ -679,48 +700,48 @@ export function Onboarding() {
             </select>
             <FieldError path="initial_admin.employment_type" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             入社日
             <input
               type="date"
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.hire_date}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, hire_date: e.target.value }))}
             />
             <FieldError path="initial_admin.hire_date" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             電話番号
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.phone}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, phone: e.target.value }))}
             />
             <FieldError path="initial_admin.phone" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             メールアドレス（連絡先）
             <input
               type="email"
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.email}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, email: e.target.value }))}
             />
             <FieldError path="initial_admin.email" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             郵便番号（7桁）
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.postal_code}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, postal_code: e.target.value }))}
             />
             <FieldError path="initial_admin.postal_code" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             住所
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.address}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, address: e.target.value }))}
             />
@@ -728,47 +749,51 @@ export function Onboarding() {
           </label>
         </div>
 
-        <div style={{ ...gridStyle, marginTop: '0.75rem' }}>
-          <label style={fieldStyle}>
+        <div className={`${gridClassName} mt-3`}>
+          <label className={fieldClassName}>
             ログインID *（半角英小文字・数字・ハイフンのみ）
             <input
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.login_id}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, login_id: e.target.value }))}
             />
             <FieldError path="initial_admin.login_id" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             初期パスワード *（8文字以上）
             <input
               type="password"
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.password}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, password: e.target.value }))}
             />
             <FieldError path="initial_admin.password" fieldErrors={fieldErrors} />
           </label>
-          <label style={fieldStyle}>
+          <label className={fieldClassName}>
             初期パスワード（確認） *
             <input
               type="password"
-              style={inputStyle}
+              className={inputClassName}
               value={initialAdmin.password_confirm}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, password_confirm: e.target.value }))}
             />
           </label>
         </div>
-        {passwordMismatch && <p role="alert" style={{ color: errorColor, fontSize: '0.85rem' }}>パスワードが一致しません</p>}
+        {passwordMismatch && (
+          <p role="alert" className="text-sm text-red-600">
+            パスワードが一致しません
+          </p>
+        )}
       </section>
 
       {dryRunResult && (
-        <section style={{ ...sectionStyle, borderColor: dryRunResult.valid ? successColor : errorColor }}>
+        <section className={`${sectionClassName} ${dryRunResult.valid ? 'border-green-700' : 'border-red-600'}`}>
           {dryRunResult.valid ? (
-            <p style={{ color: successColor, margin: 0 }}>入力内容は問題ありません。登録を確定できます。</p>
+            <p className="m-0 text-green-700">入力内容は問題ありません。登録を確定できます。</p>
           ) : (
             <div>
-              <p style={{ color: errorColor, margin: '0 0 0.5rem' }}>入力内容にエラーがあります：</p>
-              <ul style={{ color: errorColor, margin: 0 }}>
+              <p className="m-0 mb-2 text-red-600">入力内容にエラーがあります：</p>
+              <ul className="m-0 text-red-600">
                 {dryRunResult.errors.map((e, i) => (
                   <li key={i}>{e}</li>
                 ))}
@@ -778,13 +803,27 @@ export function Onboarding() {
         </section>
       )}
 
-      {submitError && <p role="alert" style={{ color: errorColor }}>{submitError}</p>}
+      {submitError && (
+        <p role="alert" className="text-red-600">
+          {submitError}
+        </p>
+      )}
 
-      <div style={{ display: 'flex', gap: '0.75rem' }}>
-        <button type="button" disabled={!canCheck || checking} onClick={handleCheck} style={{ padding: '0.5rem 1rem' }}>
+      <div className="flex gap-3">
+        <button
+          type="button"
+          disabled={!canCheck || checking}
+          onClick={handleCheck}
+          className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
           {checking ? '確認中…' : '入力内容を確認'}
         </button>
-        <button type="button" disabled={!isValidated || submitting} onClick={handleApply} style={{ padding: '0.5rem 1rem' }}>
+        <button
+          type="button"
+          disabled={!isValidated || submitting}
+          onClick={handleApply}
+          className="rounded bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
           {submitting ? '登録中…' : '登録を確定する'}
         </button>
       </div>
