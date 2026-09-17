@@ -7,6 +7,7 @@ import {
   fetchServiceTypes,
   type OnboardingApplyResult,
   type OnboardingDryRunResult,
+  type OnboardingEmploymentTypeCode,
   type OnboardingPayload,
   type OnboardingRoleCode,
   type ServiceType,
@@ -16,6 +17,13 @@ const ROLE_OPTIONS: { value: OnboardingRoleCode; label: string }[] = [
   { value: 'admin', label: '管理者' },
   { value: 'supervisor', label: '責任者・サービス提供責任者' },
   { value: 'staff', label: 'ヘルパー・訪問スタッフ' },
+]
+
+const EMPLOYMENT_TYPE_OPTIONS: { value: OnboardingEmploymentTypeCode; label: string }[] = [
+  { value: 'full_time_excl', label: '常勤専従' },
+  { value: 'full_time_conc', label: '常勤兼務' },
+  { value: 'part_time_excl', label: '非常勤専従' },
+  { value: 'part_time_conc', label: '非常勤兼務' },
 ]
 
 interface ServiceRegistrationForm {
@@ -130,6 +138,20 @@ const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minm
 const errorColor = '#b3261e'
 const successColor = '#1e7a3d'
 
+// Renders the message for one payload field (e.g. "organization.postal_code",
+// "offices.0.postal_code") if the backend's fieldErrors map has one. Placed
+// inside each <label> (fieldStyle is a flex column) so it stacks directly
+// under that field's input without disturbing the surrounding grid layout.
+function FieldError({ path, fieldErrors }: { path: string; fieldErrors: Record<string, string> }) {
+  const message = fieldErrors[path]
+  if (!message) return null
+  return (
+    <p role="alert" style={{ color: errorColor, fontSize: '0.75rem', margin: 0 }}>
+      {message}
+    </p>
+  )
+}
+
 export function Onboarding() {
   const [applicationId] = useState(() => crypto.randomUUID())
   const [organization, setOrganization] = useState(emptyOrganization)
@@ -144,6 +166,7 @@ export function Onboarding() {
   const [checking, setChecking] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [applyResult, setApplyResult] = useState<OnboardingApplyResult | null>(null)
 
   useEffect(() => {
@@ -205,7 +228,7 @@ export function Onboarding() {
         first_name: initialAdmin.first_name.trim(),
         last_name_kana: trimOrUndefined(initialAdmin.last_name_kana),
         first_name_kana: trimOrUndefined(initialAdmin.first_name_kana),
-        employment_type: trimOrUndefined(initialAdmin.employment_type),
+        employment_type: trimOrUndefined(initialAdmin.employment_type) as OnboardingEmploymentTypeCode | undefined,
         phone: trimOrUndefined(initialAdmin.phone),
         email: trimOrUndefined(initialAdmin.email),
         postal_code: trimOrUndefined(initialAdmin.postal_code),
@@ -275,6 +298,7 @@ export function Onboarding() {
   async function handleCheck() {
     setChecking(true)
     setSubmitError(null)
+    setFieldErrors({})
     setDryRunResult(null)
     try {
       const payload = buildPayload()
@@ -282,7 +306,15 @@ export function Onboarding() {
       setDryRunResult(result)
       setValidatedPayloadJson(JSON.stringify(payload))
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : '確認に失敗しました')
+      if (err instanceof ApiError && err.fieldErrors) {
+        // Field-level messages are shown inline under each input (see
+        // <FieldError> below); this banner just flags that something needs
+        // fixing, since with a long form the offending field may be off-screen.
+        setFieldErrors(err.fieldErrors)
+        setSubmitError('入力内容に誤りがあります。該当する項目のエラーメッセージをご確認ください。')
+      } else {
+        setSubmitError(err instanceof ApiError ? err.message : '確認に失敗しました')
+      }
     } finally {
       setChecking(false)
     }
@@ -296,7 +328,18 @@ export function Onboarding() {
       const result = await applyOnboarding(payload)
       setApplyResult(result)
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : '登録に失敗しました')
+      // The detailed/technical reason (SQLSTATE, raw DB message, etc.) is
+      // only useful for debugging — log it to the console rather than the
+      // screen, and show a generic notice so the user at least knows the
+      // registration didn't go through.
+      if (err instanceof ApiError) {
+        console.error('Failed to apply onboarding', err.status, err.detail ?? err.message)
+        setSubmitError(err.fieldErrors ? err.message : '登録に失敗しました。時間をおいて再度お試しください。')
+        if (err.fieldErrors) setFieldErrors(err.fieldErrors)
+      } else {
+        console.error('Failed to apply onboarding', err)
+        setSubmitError('登録に失敗しました。時間をおいて再度お試しください。')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -328,6 +371,7 @@ export function Onboarding() {
               value={organization.name}
               onChange={(e) => setOrganization((prev) => ({ ...prev, name: e.target.value }))}
             />
+            <FieldError path="organization.name" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             管理番号 *
@@ -336,6 +380,7 @@ export function Onboarding() {
               value={organization.management_number}
               onChange={(e) => setOrganization((prev) => ({ ...prev, management_number: e.target.value }))}
             />
+            <FieldError path="organization.management_number" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             契約開始日 *
@@ -345,6 +390,7 @@ export function Onboarding() {
               value={organization.contract_start_date}
               onChange={(e) => setOrganization((prev) => ({ ...prev, contract_start_date: e.target.value }))}
             />
+            <FieldError path="organization.contract_start_date" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             ログインコード
@@ -353,6 +399,7 @@ export function Onboarding() {
               value={organization.login_code}
               onChange={(e) => setOrganization((prev) => ({ ...prev, login_code: e.target.value }))}
             />
+            <FieldError path="organization.login_code" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             郵便番号（7桁）
@@ -361,6 +408,7 @@ export function Onboarding() {
               value={organization.postal_code}
               onChange={(e) => setOrganization((prev) => ({ ...prev, postal_code: e.target.value }))}
             />
+            <FieldError path="organization.postal_code" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             住所
@@ -369,6 +417,7 @@ export function Onboarding() {
               value={organization.address}
               onChange={(e) => setOrganization((prev) => ({ ...prev, address: e.target.value }))}
             />
+            <FieldError path="organization.address" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             電話番号
@@ -377,6 +426,7 @@ export function Onboarding() {
               value={organization.phone}
               onChange={(e) => setOrganization((prev) => ({ ...prev, phone: e.target.value }))}
             />
+            <FieldError path="organization.phone" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             FAX番号
@@ -385,6 +435,7 @@ export function Onboarding() {
               value={organization.fax}
               onChange={(e) => setOrganization((prev) => ({ ...prev, fax: e.target.value }))}
             />
+            <FieldError path="organization.fax" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             メールアドレス
@@ -394,6 +445,7 @@ export function Onboarding() {
               value={organization.email}
               onChange={(e) => setOrganization((prev) => ({ ...prev, email: e.target.value }))}
             />
+            <FieldError path="organization.email" fieldErrors={fieldErrors} />
           </label>
         </div>
       </section>
@@ -425,6 +477,7 @@ export function Onboarding() {
                   value={office.code}
                   onChange={(e) => updateOffice(officeIndex, { code: e.target.value })}
                 />
+                <FieldError path={`offices.${officeIndex}.code`} fieldErrors={fieldErrors} />
               </label>
               <label style={fieldStyle}>
                 事業所名 *
@@ -433,6 +486,7 @@ export function Onboarding() {
                   value={office.name}
                   onChange={(e) => updateOffice(officeIndex, { name: e.target.value })}
                 />
+                <FieldError path={`offices.${officeIndex}.name`} fieldErrors={fieldErrors} />
               </label>
               <label style={fieldStyle}>
                 表示名
@@ -441,6 +495,7 @@ export function Onboarding() {
                   value={office.display_name}
                   onChange={(e) => updateOffice(officeIndex, { display_name: e.target.value })}
                 />
+                <FieldError path={`offices.${officeIndex}.display_name`} fieldErrors={fieldErrors} />
               </label>
               <label style={fieldStyle}>
                 郵便番号（7桁）
@@ -449,6 +504,7 @@ export function Onboarding() {
                   value={office.postal_code}
                   onChange={(e) => updateOffice(officeIndex, { postal_code: e.target.value })}
                 />
+                <FieldError path={`offices.${officeIndex}.postal_code`} fieldErrors={fieldErrors} />
               </label>
               <label style={fieldStyle}>
                 住所
@@ -457,6 +513,7 @@ export function Onboarding() {
                   value={office.address}
                   onChange={(e) => updateOffice(officeIndex, { address: e.target.value })}
                 />
+                <FieldError path={`offices.${officeIndex}.address`} fieldErrors={fieldErrors} />
               </label>
               <label style={fieldStyle}>
                 電話番号
@@ -465,6 +522,7 @@ export function Onboarding() {
                   value={office.phone}
                   onChange={(e) => updateOffice(officeIndex, { phone: e.target.value })}
                 />
+                <FieldError path={`offices.${officeIndex}.phone`} fieldErrors={fieldErrors} />
               </label>
               <label style={fieldStyle}>
                 FAX番号
@@ -473,6 +531,7 @@ export function Onboarding() {
                   value={office.fax}
                   onChange={(e) => updateOffice(officeIndex, { fax: e.target.value })}
                 />
+                <FieldError path={`offices.${officeIndex}.fax`} fieldErrors={fieldErrors} />
               </label>
               <label style={fieldStyle}>
                 メールアドレス
@@ -482,6 +541,7 @@ export function Onboarding() {
                   value={office.email}
                   onChange={(e) => updateOffice(officeIndex, { email: e.target.value })}
                 />
+                <FieldError path={`offices.${officeIndex}.email`} fieldErrors={fieldErrors} />
               </label>
             </div>
 
@@ -550,6 +610,7 @@ export function Onboarding() {
                   </option>
                 ))}
             </select>
+            <FieldError path="initial_admin.office_code" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             権限 *
@@ -564,6 +625,7 @@ export function Onboarding() {
                 </option>
               ))}
             </select>
+            <FieldError path="initial_admin.role_code" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             姓 *
@@ -572,6 +634,7 @@ export function Onboarding() {
               value={initialAdmin.last_name}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, last_name: e.target.value }))}
             />
+            <FieldError path="initial_admin.last_name" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             名 *
@@ -580,6 +643,7 @@ export function Onboarding() {
               value={initialAdmin.first_name}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, first_name: e.target.value }))}
             />
+            <FieldError path="initial_admin.first_name" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             姓（カナ）
@@ -588,6 +652,7 @@ export function Onboarding() {
               value={initialAdmin.last_name_kana}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, last_name_kana: e.target.value }))}
             />
+            <FieldError path="initial_admin.last_name_kana" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             名（カナ）
@@ -596,14 +661,23 @@ export function Onboarding() {
               value={initialAdmin.first_name_kana}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, first_name_kana: e.target.value }))}
             />
+            <FieldError path="initial_admin.first_name_kana" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             雇用形態
-            <input
+            <select
               style={inputStyle}
               value={initialAdmin.employment_type}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, employment_type: e.target.value }))}
-            />
+            >
+              <option value="">未選択</option>
+              {EMPLOYMENT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <FieldError path="initial_admin.employment_type" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             入社日
@@ -613,6 +687,7 @@ export function Onboarding() {
               value={initialAdmin.hire_date}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, hire_date: e.target.value }))}
             />
+            <FieldError path="initial_admin.hire_date" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             電話番号
@@ -621,6 +696,7 @@ export function Onboarding() {
               value={initialAdmin.phone}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, phone: e.target.value }))}
             />
+            <FieldError path="initial_admin.phone" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             メールアドレス（連絡先）
@@ -630,6 +706,7 @@ export function Onboarding() {
               value={initialAdmin.email}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, email: e.target.value }))}
             />
+            <FieldError path="initial_admin.email" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             郵便番号（7桁）
@@ -638,6 +715,7 @@ export function Onboarding() {
               value={initialAdmin.postal_code}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, postal_code: e.target.value }))}
             />
+            <FieldError path="initial_admin.postal_code" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             住所
@@ -646,6 +724,7 @@ export function Onboarding() {
               value={initialAdmin.address}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, address: e.target.value }))}
             />
+            <FieldError path="initial_admin.address" fieldErrors={fieldErrors} />
           </label>
         </div>
 
@@ -657,6 +736,7 @@ export function Onboarding() {
               value={initialAdmin.login_id}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, login_id: e.target.value }))}
             />
+            <FieldError path="initial_admin.login_id" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             初期パスワード *（8文字以上）
@@ -666,6 +746,7 @@ export function Onboarding() {
               value={initialAdmin.password}
               onChange={(e) => setInitialAdmin((prev) => ({ ...prev, password: e.target.value }))}
             />
+            <FieldError path="initial_admin.password" fieldErrors={fieldErrors} />
           </label>
           <label style={fieldStyle}>
             初期パスワード（確認） *

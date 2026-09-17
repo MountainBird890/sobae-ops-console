@@ -2,14 +2,33 @@ import { supabase } from './supabase'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined
 
+// Populated when the backend rejects a request with per-field validation
+// errors (see backend/src/routes/onboarding.ts's zodFieldErrorsHook). Keyed
+// by `path.join('.')` (e.g. "organization.postal_code",
+// "offices.0.postal_code") so callers can look a field's message up directly.
+export type FieldErrors = Record<string, string>
+
 export class ApiError extends Error {
   status: number
+  fieldErrors?: FieldErrors
+  // Raw/technical detail (e.g. a Postgres error message) that's safe to log
+  // to the console for debugging but not meant to be shown on screen.
+  detail?: string
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, options?: { fieldErrors?: FieldErrors; detail?: string }) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.fieldErrors = options?.fieldErrors
+    this.detail = options?.detail
   }
+}
+
+interface ErrorResponseBody {
+  message?: string
+  error?: string | { message?: string }
+  detail?: string
+  fieldErrors?: { path: string[]; message: string }[]
 }
 
 async function request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
@@ -28,11 +47,18 @@ async function request<T>(path: string, init: { method?: string; body?: unknown 
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   })
-  const body = await res.json().catch(() => undefined)
+  const body = (await res.json().catch(() => undefined)) as ErrorResponseBody | undefined
 
   if (!res.ok) {
-    const message = (body as { message?: string } | undefined)?.message ?? `Request failed (${res.status})`
-    throw new ApiError(message, res.status)
+    const fieldErrors = body?.fieldErrors
+      ? Object.fromEntries(body.fieldErrors.map((fe) => [fe.path.join('.'), fe.message]))
+      : undefined
+    const message =
+      body?.message ??
+      (typeof body?.error === 'object' ? body.error.message : undefined) ??
+      (fieldErrors ? '入力内容に誤りがあります。各項目のエラーメッセージをご確認ください。' : undefined) ??
+      `Request failed (${res.status})`
+    throw new ApiError(message, res.status, { fieldErrors, detail: body?.detail })
   }
 
   return body as T
@@ -113,13 +139,18 @@ export interface OrganizationInput {
 
 export type OnboardingRoleCode = 'admin' | 'supervisor' | 'staff'
 
+// Mirrors the staff.employment_type CHECK constraint on Sobae_Works' real
+// schema (confirmed via pg_get_constraintdef, 2026-09-14) — presumed coding
+// of 常勤専従/常勤兼務/非常勤専従/非常勤兼務.
+export type OnboardingEmploymentTypeCode = 'full_time_excl' | 'full_time_conc' | 'part_time_excl' | 'part_time_conc'
+
 export interface InitialAdminInput {
   office_code: string
   last_name: string
   first_name: string
   last_name_kana?: string
   first_name_kana?: string
-  employment_type?: string
+  employment_type?: OnboardingEmploymentTypeCode
   phone?: string
   email?: string
   postal_code?: string
