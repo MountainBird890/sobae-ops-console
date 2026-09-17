@@ -2,7 +2,7 @@
 
 Sobae Works運営側向けの契約事業所ライフサイクル管理コンソール。詳細な仕様は `sobae_lifecycle_management_design_doc.md` を参照。
 
-このリポジトリは Sobae_Works 本体とは別アプリケーション・別リポジトリ。DBは本体と同一の Supabase PostgreSQL を共有するが、書込みは SECURITY DEFINER 関数経由のみに限定する（詳細は設計書参照）。
+このリポジトリは Sobae_Works 本体とは別アプリケーション・別リポジトリ。業務データのDB（`DATABASE_URL`）は本体（`sobae-works-staging-tokyo`。現在はそのプレビューブランチ `test-onboarding` に接続）と同一の Supabase PostgreSQL を共有するが、書込みは SECURITY DEFINER 関数経由のみに限定する（詳細は設計書参照）。一方、Console自体のログイン認証（Supabase Auth／`SUPABASE_URL`・`SUPABASE_SECRET_KEY`・`VITE_SUPABASE_URL`・`VITE_SUPABASE_PUBLISHABLE_KEY`）は本体とは別の、Console専用プロジェクト `SOBAE-WORKS-CONSOLE-STAGING` を使う。
 
 ## 構成
 
@@ -80,7 +80,9 @@ npm run typecheck    # tsc --noEmit
 
 ## Supabase
 
-Production Supabaseプロジェクトが既に存在する（本体 Sobae_Works と共有）。Staging/Preview用のSupabaseプロジェクトの要否は未整理。実際の接続はまだ行っていない。
+認証（Auth）用のSupabaseプロジェクトとして `SOBAE-WORKS-CONSOLE-STAGING` が既に存在する。これは本体 Sobae_Works とは別の、Console専用プロジェクト（DBは共有しない。ログインアカウント／Auth設定のみ）。
+
+業務データ（`DATABASE_URL`経由）は本体 Sobae_Works の Supabase プロジェクト `sobae-works-staging-tokyo` を参照する。現時点では本体の実データではなく、そのプレビューブランチ `test-onboarding`（実験用の複製DB）に接続してonboarding機能の検証を行っている。
 
 ログイン画面（`frontend/src/pages/Login.tsx`, SEC-001）・認証状態管理（`contexts/AuthContext.tsx`）・保護ルート（`components/RequireAuth.tsx`）・backend側トークン検証（`backend/src/auth/middleware.ts`）は実装済みだが、`VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY`/`SUPABASE_URL`/`SUPABASE_SECRET_KEY` が未設定の間は「未設定」表示・`503`応答で安全側に倒れる作りになっている。ログイン方式はメール＋パスワードのみ（自己サインアップUIなし。許可リスト方式のため、アカウントは別途Supabase側で払い出す前提）。実際のログイン動作は実接続後に確認が必要。
 

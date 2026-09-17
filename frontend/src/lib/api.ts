@@ -189,3 +189,10 @@ export function dryRunOnboarding(payload: OnboardingPayload) {
 export function applyOnboarding(payload: OnboardingPayload) {
   return request<OnboardingApplyResult>('/api/onboarding/apply', { method: 'POST', body: payload })
 }
+
+export function inviteStaff(email: string) {
+  return request<{ user: { id: string; email: string } }>('/api/staff/invite', {
+    method: 'POST',
+    body: { email },
+  })
+}
