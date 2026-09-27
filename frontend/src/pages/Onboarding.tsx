@@ -26,8 +26,13 @@ const EMPLOYMENT_TYPE_OPTIONS: { value: OnboardingEmploymentTypeCode; label: str
   { value: 'part_time_conc', label: '非常勤兼務' },
 ]
 
+// The five service rows always shown on the office form, matched against the
+// backend's service_types by name (fetchServiceTypes) to resolve service_code.
+const FIXED_SERVICE_NAMES = ['訪問介護', '重度訪問介護', '居宅介護', '同行援護', '行動援護'] as const
+
 interface ServiceRegistrationForm {
-  service_code: string
+  service_name: string
+  enabled: boolean
   provider_number: string
   service_office_name: string
 }
@@ -74,8 +79,13 @@ interface InitialAdminForm {
   password_confirm: string
 }
 
-function emptyServiceRegistration(): ServiceRegistrationForm {
-  return { service_code: '', provider_number: '', service_office_name: '' }
+function emptyServiceRegistrations(): ServiceRegistrationForm[] {
+  return FIXED_SERVICE_NAMES.map((name) => ({
+    service_name: name,
+    enabled: false,
+    provider_number: '',
+    service_office_name: '',
+  }))
 }
 
 function emptyOffice(): OfficeForm {
@@ -88,7 +98,7 @@ function emptyOffice(): OfficeForm {
     fax: '',
     email: '',
     display_name: '',
-    service_registrations: [],
+    service_registrations: emptyServiceRegistrations(),
   }
 }
 
@@ -214,12 +224,13 @@ export function Onboarding() {
         email: trimOrUndefined(office.email),
         display_name: trimOrUndefined(office.display_name),
         service_registrations: office.service_registrations
-          .filter((reg) => reg.service_code.trim() !== '')
+          .filter((reg) => reg.enabled)
           .map((reg) => ({
-            service_code: reg.service_code.trim(),
+            service_code: serviceTypes.find((st) => st.name === reg.service_name)?.code ?? '',
             provider_number: trimOrUndefined(reg.provider_number),
             service_office_name: trimOrUndefined(reg.service_office_name),
-          })),
+          }))
+          .filter((reg) => reg.service_code !== ''),
       })),
       initial_admin: {
         office_code: initialAdmin.office_code.trim(),
@@ -278,18 +289,12 @@ export function Onboarding() {
     )
   }
 
-  function addServiceRegistration(officeIndex: number) {
+  function toggleServiceRegistration(officeIndex: number, regIndex: number) {
     setOffices((prev) =>
       prev.map((o, i) =>
-        i === officeIndex ? { ...o, service_registrations: [...o.service_registrations, emptyServiceRegistration()] } : o,
-      ),
-    )
-  }
-
-  function removeServiceRegistration(officeIndex: number, regIndex: number) {
-    setOffices((prev) =>
-      prev.map((o, i) =>
-        i === officeIndex ? { ...o, service_registrations: o.service_registrations.filter((_, ri) => ri !== regIndex) } : o,
+        i === officeIndex
+          ? { ...o, service_registrations: o.service_registrations.map((r, ri) => (ri === regIndex ? { ...r, enabled: !r.enabled } : r)) }
+          : o,
       ),
     )
   }
@@ -555,57 +560,53 @@ export function Onboarding() {
             </div>
 
             <div className="mt-3">
-              <div className="flex items-center justify-between">
-                <span className={fieldClassName}>提供サービス</span>
-                <button
-                  type="button"
-                  onClick={() => addServiceRegistration(officeIndex)}
-                  className="rounded bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-                >
-                  + サービスを追加
-                </button>
-              </div>
+              <span className={fieldClassName}>提供サービス</span>
               {serviceTypesError && (
                 <p role="alert" className="text-sm text-red-600">
                   {serviceTypesError}
                 </p>
               )}
 
-              {office.service_registrations.map((reg, regIndex) => (
-                <div key={regIndex} className="mt-2 flex items-center gap-2">
-                  <select
-                    className={`${inputClassName} flex-[2]`}
-                    value={reg.service_code}
-                    onChange={(e) => updateServiceRegistration(officeIndex, regIndex, { service_code: e.target.value })}
-                  >
-                    <option value="">サービス種別を選択</option>
-                    {serviceTypes.map((st) => (
-                      <option key={st.code} value={st.code}>
-                        {st.name}（{st.code}）
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    placeholder="事業所番号"
-                    className={`${inputClassName} flex-1`}
-                    value={reg.provider_number}
-                    onChange={(e) => updateServiceRegistration(officeIndex, regIndex, { provider_number: e.target.value })}
-                  />
-                  <input
-                    placeholder="サービス別表示名"
-                    className={`${inputClassName} flex-1`}
-                    value={reg.service_office_name}
-                    onChange={(e) => updateServiceRegistration(officeIndex, regIndex, { service_office_name: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeServiceRegistration(officeIndex, regIndex)}
-                    className="rounded border border-slate-300 px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
-                  >
-                    削除
-                  </button>
-                </div>
-              ))}
+              <div className="mt-2 grid grid-cols-[minmax(120px,auto)_1fr_1fr_auto] items-center gap-x-3 gap-y-2">
+                <span />
+                <span className="text-xs font-medium text-slate-500">事業所番号</span>
+                <span className="text-xs font-medium text-slate-500">事業所名</span>
+                <span />
+
+                {office.service_registrations.map((reg, regIndex) => (
+                  <div key={reg.service_name} className="contents">
+                    <span className="text-sm text-slate-700">{reg.service_name}</span>
+                    <input
+                      placeholder="事業所番号"
+                      className={inputClassName}
+                      value={reg.provider_number}
+                      onChange={(e) => updateServiceRegistration(officeIndex, regIndex, { provider_number: e.target.value })}
+                    />
+                    <input
+                      placeholder="事業所名"
+                      className={inputClassName}
+                      value={reg.service_office_name}
+                      onChange={(e) => updateServiceRegistration(officeIndex, regIndex, { service_office_name: e.target.value })}
+                    />
+                    <div className="flex overflow-hidden rounded border border-slate-300 text-xs font-medium">
+                      <button
+                        type="button"
+                        onClick={() => !reg.enabled && toggleServiceRegistration(officeIndex, regIndex)}
+                        className={`px-2.5 py-1.5 ${reg.enabled ? 'bg-blue-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                      >
+                        ON
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => reg.enabled && toggleServiceRegistration(officeIndex, regIndex)}
+                        className={`border-l border-slate-300 px-2.5 py-1.5 ${!reg.enabled ? 'bg-slate-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+                      >
+                        OFF
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ))}
