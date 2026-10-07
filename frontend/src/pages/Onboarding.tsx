@@ -7,24 +7,17 @@ import {
   fetchServiceTypes,
   type OnboardingApplyResult,
   type OnboardingDryRunResult,
-  type OnboardingEmploymentTypeCode,
   type OnboardingPayload,
-  type OnboardingRoleCode,
   type ServiceType,
 } from '../lib/api'
 
-const ROLE_OPTIONS: { value: OnboardingRoleCode; label: string }[] = [
-  { value: 'admin', label: '管理者' },
-  { value: 'supervisor', label: '責任者・サービス提供責任者' },
-  { value: 'staff', label: 'ヘルパー・訪問スタッフ' },
-]
+// 初期管理者の権限は「管理者」のみ（サ責・スタッフは不要、2026-09-18打合せ決定）。画面では選択させず、
+// 固定値として送る。バックエンドの enum と DB 関数は変更しない。
+const INITIAL_ADMIN_ROLE_CODE = 'admin' as const
 
-const EMPLOYMENT_TYPE_OPTIONS: { value: OnboardingEmploymentTypeCode; label: string }[] = [
-  { value: 'full_time_excl', label: '常勤専従' },
-  { value: 'full_time_conc', label: '常勤兼務' },
-  { value: 'part_time_excl', label: '非常勤専従' },
-  { value: 'part_time_conc', label: '非常勤兼務' },
-]
+// 管理番号は本体のログインコード（organizations.login_code）になる。形式と長さはバックエンドと同じ。
+const MANAGEMENT_NUMBER_RE = /^[A-Za-z0-9-]+$/
+const MANAGEMENT_NUMBER_MAX = 30
 
 // The five service rows always shown on the office form, matched against the
 // backend's service_types by name (fetchServiceTypes) to resolve service_code.
@@ -45,13 +38,11 @@ interface OfficeForm {
   phone: string
   fax: string
   email: string
-  display_name: string
   service_registrations: ServiceRegistrationForm[]
 }
 
 interface OrganizationForm {
   name: string
-  login_code: string
   postal_code: string
   address: string
   phone: string
@@ -61,19 +52,14 @@ interface OrganizationForm {
   contract_start_date: string
 }
 
+// 画面に出す項目だけ（所属事業所・姓名・姓名カナ・ログインID・初期パスワード）。権限は固定値、
+// 雇用形態・入社日・電話・メール・郵便番号・住所は画面から非表示（登録ロジックは温存）。
 interface InitialAdminForm {
   office_code: string
   last_name: string
   first_name: string
   last_name_kana: string
   first_name_kana: string
-  employment_type: string
-  phone: string
-  email: string
-  postal_code: string
-  address: string
-  hire_date: string
-  role_code: OnboardingRoleCode
   login_id: string
   password: string
   password_confirm: string
@@ -97,7 +83,6 @@ function emptyOffice(): OfficeForm {
     phone: '',
     fax: '',
     email: '',
-    display_name: '',
     service_registrations: emptyServiceRegistrations(),
   }
 }
@@ -105,7 +90,6 @@ function emptyOffice(): OfficeForm {
 function emptyOrganization(): OrganizationForm {
   return {
     name: '',
-    login_code: '',
     postal_code: '',
     address: '',
     phone: '',
@@ -123,13 +107,6 @@ function emptyInitialAdmin(): InitialAdminForm {
     first_name: '',
     last_name_kana: '',
     first_name_kana: '',
-    employment_type: '',
-    phone: '',
-    email: '',
-    postal_code: '',
-    address: '',
-    hire_date: '',
-    role_code: 'admin',
     login_id: '',
     password: '',
     password_confirm: '',
@@ -158,6 +135,38 @@ function FieldError({ path, fieldErrors }: { path: string; fieldErrors: Record<s
     <p role="alert" className="m-0 text-xs text-red-600">
       {message}
     </p>
+  )
+}
+
+// One labelled text input with its inline field error (see FieldError). `required` only adds the
+// "*" marker; the real checks are canCheck (button) and the backend's Zod schema.
+function TextField({
+  label,
+  hint,
+  required = true,
+  type = 'text',
+  value,
+  onChange,
+  path,
+  fieldErrors,
+}: {
+  label: string
+  hint?: string
+  required?: boolean
+  type?: string
+  value: string
+  onChange: (value: string) => void
+  path: string
+  fieldErrors: Record<string, string>
+}) {
+  return (
+    <label className={fieldClassName}>
+      {label}
+      {required ? ' *' : ''}
+      {hint && <span className="text-xs text-slate-500">{hint}</span>}
+      <input type={type} className={inputClassName} value={value} onChange={(e) => onChange(e.target.value)} />
+      <FieldError path={path} fieldErrors={fieldErrors} />
+    </label>
   )
 }
 
@@ -205,24 +214,22 @@ export function Onboarding() {
       application_id: applicationId,
       organization: {
         name: organization.name.trim(),
-        login_code: trimOrUndefined(organization.login_code),
-        postal_code: trimOrUndefined(organization.postal_code),
-        address: trimOrUndefined(organization.address),
-        phone: trimOrUndefined(organization.phone),
+        postal_code: organization.postal_code.trim(),
+        address: organization.address.trim(),
+        phone: organization.phone.trim(),
         fax: trimOrUndefined(organization.fax),
-        email: trimOrUndefined(organization.email),
+        email: organization.email.trim(),
         management_number: organization.management_number.trim(),
         contract_start_date: organization.contract_start_date,
       },
       offices: offices.map((office) => ({
         code: office.code.trim(),
         name: office.name.trim(),
-        postal_code: trimOrUndefined(office.postal_code),
-        address: trimOrUndefined(office.address),
-        phone: trimOrUndefined(office.phone),
+        postal_code: office.postal_code.trim(),
+        address: office.address.trim(),
+        phone: office.phone.trim(),
         fax: trimOrUndefined(office.fax),
-        email: trimOrUndefined(office.email),
-        display_name: trimOrUndefined(office.display_name),
+        email: office.email.trim(),
         service_registrations: office.service_registrations
           .filter((reg) => reg.enabled)
           .map((reg) => ({
@@ -236,15 +243,9 @@ export function Onboarding() {
         office_code: initialAdmin.office_code.trim(),
         last_name: initialAdmin.last_name.trim(),
         first_name: initialAdmin.first_name.trim(),
-        last_name_kana: trimOrUndefined(initialAdmin.last_name_kana),
-        first_name_kana: trimOrUndefined(initialAdmin.first_name_kana),
-        employment_type: trimOrUndefined(initialAdmin.employment_type) as OnboardingEmploymentTypeCode | undefined,
-        phone: trimOrUndefined(initialAdmin.phone),
-        email: trimOrUndefined(initialAdmin.email),
-        postal_code: trimOrUndefined(initialAdmin.postal_code),
-        address: trimOrUndefined(initialAdmin.address),
-        hire_date: trimOrUndefined(initialAdmin.hire_date),
-        role_code: initialAdmin.role_code,
+        last_name_kana: initialAdmin.last_name_kana.trim(),
+        first_name_kana: initialAdmin.first_name_kana.trim(),
+        role_code: INITIAL_ADMIN_ROLE_CODE,
         login_id: initialAdmin.login_id.trim().toLowerCase(),
         password: initialAdmin.password,
       },
@@ -258,14 +259,23 @@ export function Onboarding() {
   const payloadJson = JSON.stringify(buildPayload())
   const isValidated = dryRunResult?.valid === true && validatedPayloadJson === payloadJson
 
+  const managementNumberInvalid =
+    organization.management_number.trim() !== '' &&
+    (organization.management_number.trim().length > MANAGEMENT_NUMBER_MAX || !MANAGEMENT_NUMBER_RE.test(organization.management_number.trim()))
+
+  // 法人・事業所の項目は全部必須。ただしFAXは任意、事業所の「表示名」は画面に出さないので対象外。
   const canCheck = useMemo(() => {
-    if (!organization.name.trim() || !organization.management_number.trim() || !organization.contract_start_date) return false
-    if (offices.length === 0 || offices.some((o) => !o.code.trim() || !o.name.trim())) return false
-    if (!initialAdmin.office_code.trim() || !initialAdmin.last_name.trim() || !initialAdmin.first_name.trim()) return false
-    if (!initialAdmin.login_id.trim() || !initialAdmin.password) return false
+    const filled = (v: string) => v.trim() !== ''
+    const o = organization
+    if (![o.name, o.management_number, o.postal_code, o.address, o.phone, o.email].every(filled) || !o.contract_start_date) return false
+    if (managementNumberInvalid) return false
+    if (offices.length === 0) return false
+    if (offices.some((f) => ![f.code, f.name, f.postal_code, f.address, f.phone, f.email].every(filled))) return false
+    const a = initialAdmin
+    if (![a.office_code, a.last_name, a.first_name, a.last_name_kana, a.first_name_kana, a.login_id].every(filled) || !a.password) return false
     if (passwordMismatch) return false
     return true
-  }, [organization, offices, initialAdmin, passwordMismatch])
+  }, [organization, offices, initialAdmin, passwordMismatch, managementNumberInvalid])
 
   function updateOffice(index: number, patch: Partial<OfficeForm>) {
     setOffices((prev) => prev.map((o, i) => (i === index ? { ...o, ...patch } : o)))
@@ -369,91 +379,36 @@ export function Onboarding() {
 
       <section className={sectionClassName}>
         <h2 className="mt-0 text-base font-medium text-slate-900">法人情報</h2>
+        <p className="mt-0 text-xs text-slate-500">FAX番号以外は必須項目です。</p>
         <div className={gridClassName}>
-          <label className={fieldClassName}>
-            法人名 *
-            <input
-              className={inputClassName}
-              value={organization.name}
-              onChange={(e) => setOrganization((prev) => ({ ...prev, name: e.target.value }))}
-            />
-            <FieldError path="organization.name" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            管理番号 *
-            <input
-              className={inputClassName}
-              value={organization.management_number}
-              onChange={(e) => setOrganization((prev) => ({ ...prev, management_number: e.target.value }))}
-            />
-            <FieldError path="organization.management_number" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            契約開始日 *
-            <input
-              type="date"
-              className={inputClassName}
-              value={organization.contract_start_date}
-              onChange={(e) => setOrganization((prev) => ({ ...prev, contract_start_date: e.target.value }))}
-            />
-            <FieldError path="organization.contract_start_date" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            ログインコード
-            <input
-              className={inputClassName}
-              value={organization.login_code}
-              onChange={(e) => setOrganization((prev) => ({ ...prev, login_code: e.target.value }))}
-            />
-            <FieldError path="organization.login_code" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            郵便番号（7桁）
-            <input
-              className={inputClassName}
-              value={organization.postal_code}
-              onChange={(e) => setOrganization((prev) => ({ ...prev, postal_code: e.target.value }))}
-            />
-            <FieldError path="organization.postal_code" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            住所
-            <input
-              className={inputClassName}
-              value={organization.address}
-              onChange={(e) => setOrganization((prev) => ({ ...prev, address: e.target.value }))}
-            />
-            <FieldError path="organization.address" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            電話番号
-            <input
-              className={inputClassName}
-              value={organization.phone}
-              onChange={(e) => setOrganization((prev) => ({ ...prev, phone: e.target.value }))}
-            />
-            <FieldError path="organization.phone" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            FAX番号
-            <input
-              className={inputClassName}
-              value={organization.fax}
-              onChange={(e) => setOrganization((prev) => ({ ...prev, fax: e.target.value }))}
-            />
-            <FieldError path="organization.fax" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            メールアドレス
-            <input
-              type="email"
-              className={inputClassName}
-              value={organization.email}
-              onChange={(e) => setOrganization((prev) => ({ ...prev, email: e.target.value }))}
-            />
-            <FieldError path="organization.email" fieldErrors={fieldErrors} />
-          </label>
+          <TextField label="法人名" value={organization.name} path="organization.name" fieldErrors={fieldErrors}
+            onChange={(v) => setOrganization((prev) => ({ ...prev, name: v }))} />
+          <TextField
+            label="管理番号"
+            hint={`半角英数字とハイフン、${MANAGEMENT_NUMBER_MAX}文字以内（本体のログインコードとしても使われます。大文字小文字は区別されません）`}
+            value={organization.management_number}
+            path="organization.management_number"
+            fieldErrors={fieldErrors}
+            onChange={(v) => setOrganization((prev) => ({ ...prev, management_number: v }))}
+          />
+          <TextField label="契約開始日" type="date" value={organization.contract_start_date} path="organization.contract_start_date" fieldErrors={fieldErrors}
+            onChange={(v) => setOrganization((prev) => ({ ...prev, contract_start_date: v }))} />
+          <TextField label="郵便番号（7桁）" value={organization.postal_code} path="organization.postal_code" fieldErrors={fieldErrors}
+            onChange={(v) => setOrganization((prev) => ({ ...prev, postal_code: v }))} />
+          <TextField label="住所" value={organization.address} path="organization.address" fieldErrors={fieldErrors}
+            onChange={(v) => setOrganization((prev) => ({ ...prev, address: v }))} />
+          <TextField label="電話番号" value={organization.phone} path="organization.phone" fieldErrors={fieldErrors}
+            onChange={(v) => setOrganization((prev) => ({ ...prev, phone: v }))} />
+          <TextField label="FAX番号" required={false} value={organization.fax} path="organization.fax" fieldErrors={fieldErrors}
+            onChange={(v) => setOrganization((prev) => ({ ...prev, fax: v }))} />
+          <TextField label="メールアドレス" type="email" value={organization.email} path="organization.email" fieldErrors={fieldErrors}
+            onChange={(v) => setOrganization((prev) => ({ ...prev, email: v }))} />
         </div>
+        {managementNumberInvalid && (
+          <p role="alert" className="text-sm text-red-600">
+            管理番号は半角英数字とハイフンのみ、{MANAGEMENT_NUMBER_MAX}文字以内で入力してください
+          </p>
+        )}
       </section>
 
       <section className={sectionClassName}>
@@ -484,79 +439,20 @@ export function Onboarding() {
             </div>
 
             <div className={gridClassName}>
-              <label className={fieldClassName}>
-                事業所コード *（全事業所で一意）
-                <input
-                  className={inputClassName}
-                  value={office.code}
-                  onChange={(e) => updateOffice(officeIndex, { code: e.target.value })}
-                />
-                <FieldError path={`offices.${officeIndex}.code`} fieldErrors={fieldErrors} />
-              </label>
-              <label className={fieldClassName}>
-                事業所名 *
-                <input
-                  className={inputClassName}
-                  value={office.name}
-                  onChange={(e) => updateOffice(officeIndex, { name: e.target.value })}
-                />
-                <FieldError path={`offices.${officeIndex}.name`} fieldErrors={fieldErrors} />
-              </label>
-              <label className={fieldClassName}>
-                表示名
-                <input
-                  className={inputClassName}
-                  value={office.display_name}
-                  onChange={(e) => updateOffice(officeIndex, { display_name: e.target.value })}
-                />
-                <FieldError path={`offices.${officeIndex}.display_name`} fieldErrors={fieldErrors} />
-              </label>
-              <label className={fieldClassName}>
-                郵便番号（7桁）
-                <input
-                  className={inputClassName}
-                  value={office.postal_code}
-                  onChange={(e) => updateOffice(officeIndex, { postal_code: e.target.value })}
-                />
-                <FieldError path={`offices.${officeIndex}.postal_code`} fieldErrors={fieldErrors} />
-              </label>
-              <label className={fieldClassName}>
-                住所
-                <input
-                  className={inputClassName}
-                  value={office.address}
-                  onChange={(e) => updateOffice(officeIndex, { address: e.target.value })}
-                />
-                <FieldError path={`offices.${officeIndex}.address`} fieldErrors={fieldErrors} />
-              </label>
-              <label className={fieldClassName}>
-                電話番号
-                <input
-                  className={inputClassName}
-                  value={office.phone}
-                  onChange={(e) => updateOffice(officeIndex, { phone: e.target.value })}
-                />
-                <FieldError path={`offices.${officeIndex}.phone`} fieldErrors={fieldErrors} />
-              </label>
-              <label className={fieldClassName}>
-                FAX番号
-                <input
-                  className={inputClassName}
-                  value={office.fax}
-                  onChange={(e) => updateOffice(officeIndex, { fax: e.target.value })}
-                />
-                <FieldError path={`offices.${officeIndex}.fax`} fieldErrors={fieldErrors} />
-              </label>
-              <label className={fieldClassName}>
-                メールアドレス
-                <input
-                  type="email"
-                  className={inputClassName}
-                  value={office.email}
-                  onChange={(e) => updateOffice(officeIndex, { email: e.target.value })}
-                />
-                <FieldError path={`offices.${officeIndex}.email`} fieldErrors={fieldErrors} />
-              </label>
+              <TextField label="事業所コード" hint="全事業所で一意" value={office.code} path={`offices.${officeIndex}.code`} fieldErrors={fieldErrors}
+                onChange={(v) => updateOffice(officeIndex, { code: v })} />
+              <TextField label="事業所名" value={office.name} path={`offices.${officeIndex}.name`} fieldErrors={fieldErrors}
+                onChange={(v) => updateOffice(officeIndex, { name: v })} />
+              <TextField label="郵便番号（7桁）" value={office.postal_code} path={`offices.${officeIndex}.postal_code`} fieldErrors={fieldErrors}
+                onChange={(v) => updateOffice(officeIndex, { postal_code: v })} />
+              <TextField label="住所" value={office.address} path={`offices.${officeIndex}.address`} fieldErrors={fieldErrors}
+                onChange={(v) => updateOffice(officeIndex, { address: v })} />
+              <TextField label="電話番号" value={office.phone} path={`offices.${officeIndex}.phone`} fieldErrors={fieldErrors}
+                onChange={(v) => updateOffice(officeIndex, { phone: v })} />
+              <TextField label="FAX番号" required={false} value={office.fax} path={`offices.${officeIndex}.fax`} fieldErrors={fieldErrors}
+                onChange={(v) => updateOffice(officeIndex, { fax: v })} />
+              <TextField label="メールアドレス" type="email" value={office.email} path={`offices.${officeIndex}.email`} fieldErrors={fieldErrors}
+                onChange={(v) => updateOffice(officeIndex, { email: v })} />
             </div>
 
             <div className="mt-3">
@@ -634,151 +530,27 @@ export function Onboarding() {
             </select>
             <FieldError path="initial_admin.office_code" fieldErrors={fieldErrors} />
           </label>
-          <label className={fieldClassName}>
-            権限 *
-            <select
-              className={inputClassName}
-              value={initialAdmin.role_code}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, role_code: e.target.value as OnboardingRoleCode }))}
-            >
-              {ROLE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <FieldError path="initial_admin.role_code" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            姓 *
-            <input
-              className={inputClassName}
-              value={initialAdmin.last_name}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, last_name: e.target.value }))}
-            />
-            <FieldError path="initial_admin.last_name" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            名 *
-            <input
-              className={inputClassName}
-              value={initialAdmin.first_name}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, first_name: e.target.value }))}
-            />
-            <FieldError path="initial_admin.first_name" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            姓（カナ）
-            <input
-              className={inputClassName}
-              value={initialAdmin.last_name_kana}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, last_name_kana: e.target.value }))}
-            />
-            <FieldError path="initial_admin.last_name_kana" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            名（カナ）
-            <input
-              className={inputClassName}
-              value={initialAdmin.first_name_kana}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, first_name_kana: e.target.value }))}
-            />
-            <FieldError path="initial_admin.first_name_kana" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            雇用形態
-            <select
-              className={inputClassName}
-              value={initialAdmin.employment_type}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, employment_type: e.target.value }))}
-            >
-              <option value="">未選択</option>
-              {EMPLOYMENT_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <FieldError path="initial_admin.employment_type" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            入社日
-            <input
-              type="date"
-              className={inputClassName}
-              value={initialAdmin.hire_date}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, hire_date: e.target.value }))}
-            />
-            <FieldError path="initial_admin.hire_date" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            電話番号
-            <input
-              className={inputClassName}
-              value={initialAdmin.phone}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, phone: e.target.value }))}
-            />
-            <FieldError path="initial_admin.phone" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            メールアドレス（連絡先）
-            <input
-              type="email"
-              className={inputClassName}
-              value={initialAdmin.email}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, email: e.target.value }))}
-            />
-            <FieldError path="initial_admin.email" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            郵便番号（7桁）
-            <input
-              className={inputClassName}
-              value={initialAdmin.postal_code}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, postal_code: e.target.value }))}
-            />
-            <FieldError path="initial_admin.postal_code" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            住所
-            <input
-              className={inputClassName}
-              value={initialAdmin.address}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, address: e.target.value }))}
-            />
-            <FieldError path="initial_admin.address" fieldErrors={fieldErrors} />
-          </label>
+          <div className={fieldClassName}>
+            権限
+            <p className="m-0 rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-700">管理者（固定）</p>
+          </div>
+          <TextField label="姓" value={initialAdmin.last_name} path="initial_admin.last_name" fieldErrors={fieldErrors}
+            onChange={(v) => setInitialAdmin((prev) => ({ ...prev, last_name: v }))} />
+          <TextField label="名" value={initialAdmin.first_name} path="initial_admin.first_name" fieldErrors={fieldErrors}
+            onChange={(v) => setInitialAdmin((prev) => ({ ...prev, first_name: v }))} />
+          <TextField label="姓（カナ）" value={initialAdmin.last_name_kana} path="initial_admin.last_name_kana" fieldErrors={fieldErrors}
+            onChange={(v) => setInitialAdmin((prev) => ({ ...prev, last_name_kana: v }))} />
+          <TextField label="名（カナ）" value={initialAdmin.first_name_kana} path="initial_admin.first_name_kana" fieldErrors={fieldErrors}
+            onChange={(v) => setInitialAdmin((prev) => ({ ...prev, first_name_kana: v }))} />
         </div>
 
         <div className={`${gridClassName} mt-3`}>
-          <label className={fieldClassName}>
-            ログインID *（半角英小文字・数字・ハイフンのみ）
-            <input
-              className={inputClassName}
-              value={initialAdmin.login_id}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, login_id: e.target.value }))}
-            />
-            <FieldError path="initial_admin.login_id" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            初期パスワード *（8文字以上）
-            <input
-              type="password"
-              className={inputClassName}
-              value={initialAdmin.password}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, password: e.target.value }))}
-            />
-            <FieldError path="initial_admin.password" fieldErrors={fieldErrors} />
-          </label>
-          <label className={fieldClassName}>
-            初期パスワード（確認） *
-            <input
-              type="password"
-              className={inputClassName}
-              value={initialAdmin.password_confirm}
-              onChange={(e) => setInitialAdmin((prev) => ({ ...prev, password_confirm: e.target.value }))}
-            />
-          </label>
+          <TextField label="ログインID" hint="半角英小文字・数字・ハイフンのみ" value={initialAdmin.login_id} path="initial_admin.login_id" fieldErrors={fieldErrors}
+            onChange={(v) => setInitialAdmin((prev) => ({ ...prev, login_id: v }))} />
+          <TextField label="初期パスワード" hint="8文字以上" type="password" value={initialAdmin.password} path="initial_admin.password" fieldErrors={fieldErrors}
+            onChange={(v) => setInitialAdmin((prev) => ({ ...prev, password: v }))} />
+          <TextField label="初期パスワード（確認）" type="password" value={initialAdmin.password_confirm} path="initial_admin.password_confirm" fieldErrors={fieldErrors}
+            onChange={(v) => setInitialAdmin((prev) => ({ ...prev, password_confirm: v }))} />
         </div>
         {passwordMismatch && (
           <p role="alert" className="text-sm text-red-600">

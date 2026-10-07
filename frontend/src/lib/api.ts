@@ -116,23 +116,23 @@ export interface ServiceRegistrationInput {
 export interface OfficeInput {
   code: string
   name: string
-  postal_code?: string
-  address?: string
-  phone?: string
+  postal_code: string
+  address: string
+  phone: string
   fax?: string
-  email?: string
+  email: string
   display_name?: string
   service_registrations: ServiceRegistrationInput[]
 }
 
+// login_code is not an input: the backend derives it from management_number.
 export interface OrganizationInput {
   name: string
-  login_code?: string
-  postal_code?: string
-  address?: string
-  phone?: string
+  postal_code: string
+  address: string
+  phone: string
   fax?: string
-  email?: string
+  email: string
   management_number: string
   contract_start_date: string
 }
@@ -148,8 +148,8 @@ export interface InitialAdminInput {
   office_code: string
   last_name: string
   first_name: string
-  last_name_kana?: string
-  first_name_kana?: string
+  last_name_kana: string
+  first_name_kana: string
   employment_type?: OnboardingEmploymentTypeCode
   phone?: string
   email?: string
