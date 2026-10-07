@@ -6,6 +6,7 @@ import { parseConnection } from './conn.ts'
 import { parseArgs } from './args.ts'
 import { assertEnvironmentName } from './env.ts'
 import { maskSecrets } from './mask.ts'
+import { formatFatal } from './report.ts'
 
 const HANDLERS = { init: cmdInit, status: cmdStatus, plan: cmdPlan, migrate: cmdMigrate, verify: cmdVerify } as const
 
@@ -35,7 +36,7 @@ async function main(): Promise<number> {
     }
     return await HANDLERS[command](opts)
   } catch (err) {
-    console.error(`エラー: ${maskSecrets(err instanceof Error ? err.message : String(err), secrets)}`)
+    console.error(formatFatal(err, secrets))
     return 1
   }
 }

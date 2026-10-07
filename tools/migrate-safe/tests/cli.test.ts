@@ -27,7 +27,10 @@ describe('CLI refusals happen before any connection', () => {
     assert.doesNotMatch(r.stderr, /ECONNREFUSED|connect/i)
   })
   it('refuses an unknown environment and a missing --environment', () => {
-    assert.equal(runCli(['status', '--environment=test-onboarding'], { CONSOLE_ADMIN_DATABASE_URL: BOGUS_URL }).status, 1)
+    const unknown = runCli(['status', '--environment=some-other-env'], { CONSOLE_ADMIN_DATABASE_URL: BOGUS_URL })
+    assert.equal(unknown.status, 1)
+    assert.match(unknown.stderr, /未知/)
+    assert.doesNotMatch(unknown.stderr, /ECONNREFUSED|connect/i)
     assert.equal(runCli(['status'], { CONSOLE_ADMIN_DATABASE_URL: BOGUS_URL }).status, 1)
   })
   it('requires CONSOLE_ADMIN_DATABASE_URL and never prints its value', () => {
