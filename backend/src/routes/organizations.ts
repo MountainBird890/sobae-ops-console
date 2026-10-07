@@ -3,7 +3,12 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { DatabaseNotConfiguredError, getSql } from '../db/client.js'
 
-// Shape this route expects from v_organization_summary (see sql/v_organization_summary.sql).
+// Shape this route expects from console.v_organization_summary (see
+// sql/migrations/09_v_organization_summary.sql). The view lives in the `console`
+// schema — always schema-qualify, never rely on search_path.
+// Note: `status` is NULL for organizations that existed before the status column
+// was added (not backfilled by design); those rows are not counted in any of the
+// three statuses below.
 const ORGANIZATION_STATUSES = ['active', 'suspended', 'terminated'] as const
 
 interface OrganizationSummaryRow {
@@ -29,7 +34,7 @@ organizations.get('/', zValidator('query', listQuerySchema), async (c) => {
     const sql = getSql()
     const rows = await sql<OrganizationSummaryRow[]>`
       select id, name, management_number, status, contract_start_date, contract_end_date
-      from v_organization_summary
+      from console.v_organization_summary
       where (${status ?? null}::text is null or status = ${status ?? null})
         and (
           ${q ?? null}::text is null
@@ -52,7 +57,7 @@ organizations.get('/summary', async (c) => {
   try {
     const sql = getSql()
     const rows = await sql<{ status: string; count: string }[]>`
-      select status, count(*) as count from v_organization_summary group by status
+      select status, count(*) as count from console.v_organization_summary group by status
     `
 
     const counts: Record<(typeof ORGANIZATION_STATUSES)[number], number> = {
@@ -85,7 +90,7 @@ organizations.get('/:id', zValidator('param', z.object({ id: z.uuid() })), async
     const sql = getSql()
     const rows = await sql<OrganizationSummaryRow[]>`
       select id, name, management_number, status, contract_start_date, contract_end_date
-      from v_organization_summary
+      from console.v_organization_summary
       where id = ${id}
     `
     const organization = rows[0]

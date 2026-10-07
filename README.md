@@ -59,7 +59,7 @@ npm run typecheck    # tsc --noEmit
 | GET | `/api/organizations/summary` | ダッシュボード用件数集計（active/suspended/terminated/total） |
 | GET | `/api/organizations/:id` | 事業所詳細1件。`id`はUUID形式必須（不正なら400）、存在しなければ404 |
 
-いずれも `v_organization_summary` ビューを参照する実装だが、**このビューはまだ存在しない**（DBロール・関数・ビュー設計は設計書のRACI表よりShimoさんの担当）。ビュー未作成／`DATABASE_URL`未設定の間は `503 {"error":"database_not_configured"}` を返す。`routes/organizations.ts` 内のコメントに、コードが前提としている列構成（`id`, `name`, `management_number`, `status`, `contract_start_date`, `contract_end_date`）を明記している。実際のビュー作成時に形が異なる場合はどちらかを調整する。
+いずれも `console.v_organization_summary` ビュー（`console`スキーマ。`sql/migrations/09`）を参照する実装だが、**このビューはまだstaging親には適用されていない**（`console`スキーマへの適用は、`sql/migrations/README.md` §5・§9と`sql/README.md`を参照）。ビュー未作成／`DATABASE_URL`未設定の間は `503 {"error":"database_not_configured"}` を返す。`routes/organizations.ts` 内のコメントに、コードが前提としている列構成（`id`, `name`, `management_number`, `status`, `contract_start_date`, `contract_end_date`）を明記している。実際のビュー作成時に形が異なる場合はどちらかを調整する。
 
 `/api/*` は認証必須（`auth/middleware.ts`）。`Authorization: Bearer <Supabase access token>` を要求し、`SUPABASE_URL`/`SUPABASE_SECRET_KEY` 未設定時は `503 {"error":"auth_not_configured"}`、トークン欠落・不正時は `401 {"error":"unauthorized"}` を返す（fail-closed）。`/health` のみ認証不要。
 

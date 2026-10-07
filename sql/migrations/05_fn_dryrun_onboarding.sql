@@ -5,9 +5,11 @@
 -- 作成日：2026-08-17（2026-08-19: 実スキーマ確認に伴いfn_apply_onboarding側が全面改訂
 --       されたためヘッダーも更新。ロジック本体（BEGIN/EXCEPTIONによる強制ロールバック）
 --       は無変更）
+-- 変更履歴：2026-10-07 consoleスキーマ化（再ベースライン。適用済みの管理環境が無いため既存ファイルを
+--       直接書き直した。詳細は README.md §5）。関数のロジックは無変更。
 -- 依存する既存オブジェクト：04_fn_apply_onboarding.sql（同一ペイロード契約。ロジックの
---       重複を避けるためfn_apply_onboarding自体を呼び出す）
--- ロールバック方針：drop function if exists fn_dryrun_onboarding(jsonb, text);
+--       重複を避けるためconsole.fn_apply_onboarding自体を呼び出す）
+-- ロールバック方針：drop function if exists console.fn_dryrun_onboarding(jsonb, text);
 --
 -- BEGIN/EXCEPTIONブロックはPL/pgSQLの暗黙のセーブポイントとして機能する。ブロック内で
 -- 例外を発生させると、そのブロックが行った変更はロールバックされる（ただしローカル変数
@@ -18,7 +20,7 @@
 -- Supabase Auth前提でauth_uidを省略する必要があったが、今の実装にその制約は無い。
 -- 含めることでlogin_idの重複もdry-runの時点で検知できる）。
 
-create or replace function fn_dryrun_onboarding(p_payload jsonb, p_applied_by text)
+create or replace function console.fn_dryrun_onboarding(p_payload jsonb, p_applied_by text)
 returns jsonb
 language plpgsql
 security definer
@@ -28,7 +30,7 @@ declare
   v_result jsonb;
 begin
   begin
-    v_result := fn_apply_onboarding(p_payload, p_applied_by);
+    v_result := console.fn_apply_onboarding(p_payload, p_applied_by);
     raise exception using errcode = 'DRYRN';
   exception
     when sqlstate 'DRYRN' then
@@ -40,5 +42,6 @@ end;
 $$;
 
 -- fn_apply_onboardingと同じ所有者に揃える（01_roles.sql参照）。
-alter function fn_dryrun_onboarding(jsonb, text) owner to sobae_onboarding_executor;
-grant execute on function fn_dryrun_onboarding(jsonb, text) to sobae_ops_executor;
+revoke execute on function console.fn_dryrun_onboarding(jsonb, text) from public, anon, authenticated, service_role;
+alter function console.fn_dryrun_onboarding(jsonb, text) owner to sobae_onboarding_executor;
+grant execute on function console.fn_dryrun_onboarding(jsonb, text) to sobae_ops_executor;

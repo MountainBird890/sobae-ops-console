@@ -4,8 +4,11 @@
 -- 作成日：2026-08-17（2026-08-19: Sobae_Works本体の実スキーマ・実procedureを確認した
 --       上で全面改訂。旧版はテーブル名が単数形で、認証をSupabase Auth(auth_uid)前提に
 --       していたが、どちらも実態と異なることが判明したため作り直した。詳細は会話ログ参照）
+-- 変更履歴：2026-10-07 consoleスキーマ化（再ベースライン。適用済みの管理環境が無いため既存ファイルを
+--       直接書き直した。詳細は README.md §5）。関数のロジックは無変更。
 -- 依存する既存オブジェクト：
---   01_roles.sql, 02_organization_alter.sql, 03_contract_lifecycle_log.sql
+--   01_roles.sql, 02_console_schema.sql, 03_contract_lifecycle_log.sql、
+--   および本体のmigration（organizationsの4列とCHECK。旧02の内容。番号は本体側が決定、250想定）
 --   Sobae_Works本体スキーマ（pg_dump --schema-onlyで実在確認済み）：
 --     organizations, offices, staff, system_users, roles, service_types,
 --     office_service_registrations
@@ -51,7 +54,7 @@
 --     作成するのみ（is_activeは新規行のデフォルトtrueのままでよい）。suspend/reactivate/
 --     terminateでの同期は06〜08側の責務。
 --
--- ロールバック方針：drop function if exists fn_apply_onboarding(jsonb, text);
+-- ロールバック方針：drop function if exists console.fn_apply_onboarding(jsonb, text);
 --   （実行するとsobae_ops_executorのEXECUTE権限も自動的に失われる）
 --
 -- ONBOARDING FLOW（確定）：
@@ -111,7 +114,7 @@
 -- （dry-run時点でも検知可能——旧版のGAPはこれで解消）。氏名や連絡先が同じでも
 -- login_idが異なれば別人として扱われる点は変わらず未解決。
 
-create or replace function fn_apply_onboarding(p_payload jsonb, p_applied_by text)
+create or replace function console.fn_apply_onboarding(p_payload jsonb, p_applied_by text)
 returns jsonb
 language plpgsql
 security definer
@@ -137,7 +140,7 @@ begin
     raise exception 'application_id is required' using errcode = '22023';
   end if;
 
-  if exists (select 1 from contract_lifecycle_log where application_id = v_application_id) then
+  if exists (select 1 from console.contract_lifecycle_log where application_id = v_application_id) then
     raise exception 'application % has already been applied', v_application_id
       using errcode = '23505';
   end if;
@@ -261,7 +264,7 @@ begin
   )
   returning id into v_system_user_id;
 
-  insert into contract_lifecycle_log (
+  insert into console.contract_lifecycle_log (
     organization_id, management_number, application_id, event_type, status_before, status_after, contract_date, applied_by
   )
   values (
@@ -290,5 +293,9 @@ $$;
 -- SECURITY DEFINER関数は所有者の権限で実行される。organizations/offices等への実際の
 -- INSERT/UPDATE権限を持つのは呼び出し側のsobae_ops_executorではなく、この専用ロール
 -- （01_roles.sql参照。Sobae_Works本体側に必要なGRANT/RLSポリシーを別途依頼する）。
-alter function fn_apply_onboarding(jsonb, text) owner to sobae_onboarding_executor;
-grant execute on function fn_apply_onboarding(jsonb, text) to sobae_ops_executor;
+-- 既定権限（作成者postgresのグローバル既定。本体Migration 215）に頼らず、明示的にrevokeする
+-- （作成者が postgres 以外になった場合に PUBLIC/anon への EXECUTE が付く事故の防止。
+-- 所有者変更の前に実行する）。
+revoke execute on function console.fn_apply_onboarding(jsonb, text) from public, anon, authenticated, service_role;
+alter function console.fn_apply_onboarding(jsonb, text) owner to sobae_onboarding_executor;
+grant execute on function console.fn_apply_onboarding(jsonb, text) to sobae_ops_executor;

@@ -3,8 +3,11 @@
 --       設計書の確認モーダル＋事業所名再入力による「一度きりの意図的操作」モデルに従う）。
 -- 作成日：2026-08-17（2026-08-19: 実スキーマ確認結果に合わせて全面改訂。テーブル名を
 --       organizations に修正し、app._procedure_context対応・is_active同期を追加）
--- 依存する既存オブジェクト：01_roles.sql, 02_organization_alter.sql, 03_contract_lifecycle_log.sql
--- ロールバック方針：drop function if exists fn_suspend_organization(uuid, text, text);
+-- 変更履歴：2026-10-07 consoleスキーマ化（再ベースライン。適用済みの管理環境が無いため既存ファイルを
+--       直接書き直した。詳細は README.md §5）。関数のロジックは無変更。
+-- 依存する既存オブジェクト：01_roles.sql, 02_console_schema.sql, 03_contract_lifecycle_log.sql、
+--       および本体のmigration（organizationsの4列とCHECK。旧02の内容。番号は本体側が決定、250想定）
+-- ロールバック方針：drop function if exists console.fn_suspend_organization(uuid, text, text);
 --
 -- p_applied_by は操作者の識別子（例：メールアドレス）。backend側が検証済みのSupabase
 -- セッションから解決して渡す想定。sobae_ops_executorは素のPostgres直接接続であり、
@@ -15,9 +18,10 @@
 -- SECURITYが有効で、UPDATE用ポリシーがapp._procedure_context = 'true' を前提にしている
 -- （実測確認済み。本体のproc_*と同じパターン）。また、organizations.is_active（既存bool、
 -- 「falseの場合はSOBAE側で無効化した法人」）と、こちらが追加したstatus列の整合を取るため、
--- suspendではis_activeもfalseにする（02_organization_alter.sqlのコメント参照）。
+-- suspendではis_activeもfalseにする（旧02_organization_alter.sqlのコメント参照。現在は本体のmigrationへ移管済み。
+-- 経緯は 02_console_schema.sql のコメントと README.md §5 を参照）。
 
-create or replace function fn_suspend_organization(
+create or replace function console.fn_suspend_organization(
   p_organization_id uuid,
   p_reason text,
   p_applied_by text
@@ -56,7 +60,7 @@ begin
   set status = 'suspended', is_active = false
   where id = p_organization_id;
 
-  insert into contract_lifecycle_log (
+  insert into console.contract_lifecycle_log (
     organization_id, management_number, event_type, status_before, status_after, reason, applied_by
   )
   select p_organization_id, o.management_number, 'suspended', v_status_before, 'suspended', p_reason, p_applied_by
@@ -70,5 +74,8 @@ begin
 end;
 $$;
 
-alter function fn_suspend_organization(uuid, text, text) owner to sobae_onboarding_executor;
-grant execute on function fn_suspend_organization(uuid, text, text) to sobae_ops_executor;
+-- 既定権限（作成者postgresのグローバル既定。本体Migration 215）に頼らず、明示的にrevokeする
+-- （所有者変更の前に実行）。
+revoke execute on function console.fn_suspend_organization(uuid, text, text) from public, anon, authenticated, service_role;
+alter function console.fn_suspend_organization(uuid, text, text) owner to sobae_onboarding_executor;
+grant execute on function console.fn_suspend_organization(uuid, text, text) to sobae_ops_executor;
