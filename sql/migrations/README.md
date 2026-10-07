@@ -56,11 +56,14 @@ sql/migrations/NN_snake_case_description.sql
 
 ## 7. 適用記録
 
-各マイグレーション適用後、適用履歴（filename, checksum, applied_at, applied_by, fingerprintの前後など）が`console.migration_history`に記録される予定（Console側のrunner。**未実装**）。Sobae_Works本体の`sobae_meta.migration_history`とは別に管理する。記録用のINSERT文は適用スクリプト側で自動化されるため、各マイグレーションファイルの末尾に含める必要はない。
+各マイグレーション適用後、適用履歴（filename, checksum, applied_at, applied_by, source_git_commit, fingerprintの前後）が`console.migration_history`に記録される。記録は、Console側のrunner（`tools/migrate-safe/`。使い方はそのREADMEを参照）が自動で行う。Sobae_Works本体の`sobae_meta.migration_history`とは別に管理する（共有しない）。記録用のINSERT文は、各マイグレーションファイルの末尾に含めない。
+
+runnerは、チェックサム、番号の欠番・重複、禁止SQL（`BEGIN`/`COMMIT`等）を検査し、1ファイル=1トランザクションで適用する。`01_roles.sql`は、環境によっては手作業で適用済みのため、`init`で「取り込み済み」として記録する（SQLは実行しない）。
 
 ## 8. 特に厳守すること
 
-- Supabaseダッシュボードやpsqlからスキーマ変更を直接実行しない。スキーマ変更は必ずこのディレクトリのマイグレーションファイルを経由する
+- Supabaseダッシュボードやpsqlからスキーマ変更を直接実行しない。スキーマ変更は必ずこのディレクトリのマイグレーションファイルを経由し、**適用は`tools/migrate-safe/`のrunnerで行う**（psqlで`-f`適用すると、履歴・fingerprintから外れる）
+- staging親・test-onboarding・本番に対するrunnerの実行は、ユーザーの承認を得てから行う。本番（`sobae-works-production-tokyo`）は、runnerが拒否する
 - 1つのマイグレーションファイルに、無関係な複数の変更を混ぜない
 - 迷ったら新しいファイルを追加する。既存ファイルを書き直すより積み増しを優先する
 
