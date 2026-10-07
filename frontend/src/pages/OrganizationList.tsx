@@ -92,12 +92,12 @@ export function OrganizationList() {
                     {org.name}
                   </Link>
                 </td>
-                <td className="p-2">{org.management_number}</td>
+                <td className="p-2">{org.management_number ?? '—'}</td>
                 <td className="p-2">
                   <StatusBadge status={org.status} />
                 </td>
-                <td className="p-2">{org.contract_start_date}</td>
-                <td className="p-2">{org.contract_end_date ?? '-'}</td>
+                <td className="p-2">{org.contract_start_date ?? '—'}</td>
+                <td className="p-2">{org.contract_end_date ?? '—'}</td>
               </tr>
             ))}
           </tbody>

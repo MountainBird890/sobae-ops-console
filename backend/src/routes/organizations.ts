@@ -6,17 +6,19 @@ import { DatabaseNotConfiguredError, getSql } from '../db/client.js'
 // Shape this route expects from console.v_organization_summary (see
 // sql/migrations/09_v_organization_summary.sql). The view lives in the `console`
 // schema — always schema-qualify, never rely on search_path.
-// Note: `status` is NULL for organizations that existed before the status column
-// was added (not backfilled by design); those rows are not counted in any of the
-// three statuses below.
+// Organizations that existed before the status column was added (migration 250, not
+// backfilled) have NULL status, management_number and contract_start_date. The view's
+// `status` is the *effective* status (migration 11): NULL + is_active = true is reported
+// as 'active'; NULL + is_active = false stays NULL ("needs review", counted as `unconfirmed`).
+// management_number / contract_start_date can still be NULL for such legacy rows.
 const ORGANIZATION_STATUSES = ['active', 'suspended', 'terminated'] as const
 
 interface OrganizationSummaryRow {
   id: string
   name: string
-  management_number: string
-  status: (typeof ORGANIZATION_STATUSES)[number]
-  contract_start_date: string
+  management_number: string | null
+  status: (typeof ORGANIZATION_STATUSES)[number] | null
+  contract_start_date: string | null
   contract_end_date: string | null
 }
 
@@ -41,7 +43,7 @@ organizations.get('/', zValidator('query', listQuerySchema), async (c) => {
           or name ilike '%' || ${q ?? null} || '%'
           or management_number ilike '%' || ${q ?? null} || '%'
         )
-      order by contract_start_date desc
+      order by contract_start_date desc nulls last, name
     `
     return c.json({ organizations: rows })
   } catch (err) {
@@ -56,7 +58,7 @@ organizations.get('/', zValidator('query', listQuerySchema), async (c) => {
 organizations.get('/summary', async (c) => {
   try {
     const sql = getSql()
-    const rows = await sql<{ status: string; count: string }[]>`
+    const rows = await sql<{ status: string | null; count: string }[]>`
       select status, count(*) as count from console.v_organization_summary group by status
     `
 
@@ -66,14 +68,18 @@ organizations.get('/summary', async (c) => {
       terminated: 0,
     }
     let total = 0
+    let unconfirmed = 0
     for (const row of rows) {
-      if ((ORGANIZATION_STATUSES as readonly string[]).includes(row.status)) {
+      if (row.status !== null && (ORGANIZATION_STATUSES as readonly string[]).includes(row.status)) {
         counts[row.status as (typeof ORGANIZATION_STATUSES)[number]] = Number(row.count)
+      } else {
+        // NULL (legacy organization that is not active) or an unexpected value.
+        unconfirmed += Number(row.count)
       }
       total += Number(row.count)
     }
 
-    return c.json({ ...counts, total })
+    return c.json({ ...counts, unconfirmed, total })
   } catch (err) {
     if (err instanceof DatabaseNotConfiguredError) {
       return c.json({ error: 'database_not_configured', message: 'Database connection is not configured yet.' }, 503)

@@ -148,18 +148,18 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
     assert.equal(await cmdVerify(run()), 0)
   })
 
-  it('plan lists 02..10 as pending and passes every check', async () => {
+  it('plan lists 02..11 as pending and passes every check', async () => {
     lines = []
     assert.equal(await cmdPlan(run()), 0)
-    assert.match(text(), /未適用ファイル: 9 件/)
+    assert.match(text(), /未適用ファイル: 10 件/)
     assert.match(text(), /migrate 可能: はい/)
   })
 
-  it('migrate applies 02..10, then status / verify are clean and a second migrate is a no-op', async () => {
+  it('migrate applies 02..11, then status / verify are clean and a second migrate is a no-op', async () => {
     lines = []
     assert.equal(await cmdMigrate(run()), 0)
     const h = await history()
-    assert.deepEqual(h.map((r) => r.migration_version), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    assert.deepEqual(h.map((r) => r.migration_version), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     lines = []
     assert.equal(await cmdStatus(run()), 0)
     assert.match(text(), /未適用: なし/)
@@ -203,13 +203,13 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
       lines = []
       assert.equal(await cmdVerify(run()), 1)
       assert.match(text(), /チェックサム/)
-      writeFileSync(join(dir, '11_ok.sql'), 'create table console.zz_probe (id int);\n')
+      writeFileSync(join(dir, '12_ok.sql'), 'create table console.zz_probe (id int);\n')
       lines = []
       assert.equal(await cmdMigrate(run()), 1)
       assert.equal((await sql`select to_regclass('console.zz_probe') as t`)[0].t, null)
     } finally {
       writeFileSync(target, original)
-      rmSync(join(dir, '11_ok.sql'), { force: true })
+      rmSync(join(dir, '12_ok.sql'), { force: true })
     }
     lines = []
     assert.equal(await cmdVerify(run()), 0)
@@ -217,7 +217,7 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
 
   it('refuses out-of-band drift and recovers when it is undone', async () => {
     await sql.unsafe('alter table console.contract_lifecycle_log add column zz_drift int')
-    writeFileSync(join(dir, '11_ok.sql'), 'create table console.zz_probe (id int);\n')
+    writeFileSync(join(dir, '12_ok.sql'), 'create table console.zz_probe (id int);\n')
     try {
       lines = []
       assert.equal(await cmdVerify(run()), 1)
@@ -227,7 +227,7 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
       assert.equal((await sql`select to_regclass('console.zz_probe') as t`)[0].t, null)
     } finally {
       await sql.unsafe('alter table console.contract_lifecycle_log drop column zz_drift')
-      rmSync(join(dir, '11_ok.sql'), { force: true })
+      rmSync(join(dir, '12_ok.sql'), { force: true })
     }
     lines = []
     assert.equal(await cmdVerify(run()), 0)
@@ -235,38 +235,38 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
 
   it('a failing migration is rolled back completely and leaves no history', async () => {
     // syntax error
-    writeFileSync(join(dir, '11_bad_syntax.sql'), 'create table console.zz_bad (id int;\n')
+    writeFileSync(join(dir, '12_bad_syntax.sql'), 'create table console.zz_bad (id int;\n')
     lines = []
     await assert.rejects(cmdMigrate(run()))
     // partial failure after a successful statement: the whole file must roll back
-    writeFileSync(join(dir, '11_bad_syntax.sql'), 'create table console.zz_partial (id int);\nselect 1/0;\n')
+    writeFileSync(join(dir, '12_bad_syntax.sql'), 'create table console.zz_partial (id int);\nselect 1/0;\n')
     lines = []
     await assert.rejects(cmdMigrate(run()))
-    rmSync(join(dir, '11_bad_syntax.sql'), { force: true })
-    assert.equal((await history()).length, 10)
+    rmSync(join(dir, '12_bad_syntax.sql'), { force: true })
+    assert.equal((await history()).length, 11)
     assert.equal((await sql`select to_regclass('console.zz_partial') as t`)[0].t, null)
     lines = []
     assert.equal(await cmdVerify(run()), 0)
   })
 
   it('refuses forbidden SQL and number gaps in plan and migrate', async () => {
-    writeFileSync(join(dir, '11_commit.sql'), 'create table console.zz_c (id int);\ncommit;\n')
+    writeFileSync(join(dir, '12_commit.sql'), 'create table console.zz_c (id int);\ncommit;\n')
     lines = []
     assert.equal(await cmdPlan(run()), 1)
     assert.match(text(), /トランザクション制御/)
     lines = []
     assert.equal(await cmdMigrate(run()), 1)
     assert.equal((await sql`select to_regclass('console.zz_c') as t`)[0].t, null)
-    rmSync(join(dir, '11_commit.sql'), { force: true })
+    rmSync(join(dir, '12_commit.sql'), { force: true })
 
-    writeFileSync(join(dir, '12_gap.sql'), 'create table console.zz_gap (id int);\n')
+    writeFileSync(join(dir, '13_gap.sql'), 'create table console.zz_gap (id int);\n')
     lines = []
     assert.equal(await cmdPlan(run()), 1)
     assert.match(text(), /欠番/)
     lines = []
     assert.equal(await cmdMigrate(run()), 1)
     assert.equal((await sql`select to_regclass('console.zz_gap') as t`)[0].t, null)
-    rmSync(join(dir, '12_gap.sql'), { force: true })
+    rmSync(join(dir, '13_gap.sql'), { force: true })
   })
 
   it('the staging profile refuses this database (database_id / project_ref mismatch)', async () => {
@@ -289,12 +289,12 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
     assert.equal(await cmdMigrate(run('local', u.toString())), 1)
   })
 
-  it('applies a valid new migration (11) and records before/after fingerprints', async () => {
-    writeFileSync(join(dir, '11_zz_probe.sql'), 'create table console.zz_probe (id int);\n')
+  it('applies a valid new migration (12) and records before/after fingerprints', async () => {
+    writeFileSync(join(dir, '12_zz_probe.sql'), 'create table console.zz_probe (id int);\n')
     lines = []
     assert.equal(await cmdMigrate(run()), 0)
     const rows = await sql<{ before: string; after: string }[]>`
-      select schema_fingerprint_before as before, schema_fingerprint_after as after from console.migration_history where migration_version = 11`
+      select schema_fingerprint_before as before, schema_fingerprint_after as after from console.migration_history where migration_version = 12`
     assert.equal(rows.length, 1)
     assert.notEqual(rows[0].before, rows[0].after)
     lines = []

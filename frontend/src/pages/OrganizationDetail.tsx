@@ -68,7 +68,7 @@ export function OrganizationDetail() {
             {FIELDS.map(({ key, label }) => (
               <div key={key} className="contents">
                 <dt className="text-slate-500">{label}</dt>
-                <dd className="m-0">{organization[key] ?? '-'}</dd>
+                <dd className="m-0">{organization[key] ?? '—'}</dd>
               </div>
             ))}
           </dl>
