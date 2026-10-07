@@ -10,8 +10,9 @@ export class DatabaseNotConfiguredError extends Error {
 }
 
 // Must connect as the sobae_ops_executor role, which only has EXECUTE on the
-// fn_* SECURITY DEFINER functions and SELECT on v_organization_summary — no
-// direct table DML. See sobae_lifecycle_management_design_doc.md and sql/.
+// console.fn_* SECURITY DEFINER functions and SELECT on console.v_organization_summary
+// — no direct table DML. Queries must schema-qualify (console.*); the objects live in
+// the `console` schema, not `public`. See sobae_lifecycle_management_design_doc.md and sql/.
 export function getSql(): postgres.Sql {
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) {

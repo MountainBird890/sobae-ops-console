@@ -29,7 +29,8 @@ sql/migrations/NN_snake_case_description.sql
 
 - `NN`は2桁以上のゼロ埋め連番（01, 02, 03...）、適用順序を表す
 - 既存ファイルの番号を変更しない。番号が飛んでいても詰めない
-- 例：`01_roles.sql`、`02_organization_alter.sql`、`03_contract_lifecycle_log.sql`、`04_fn_apply_onboarding.sql`
+- 例：`01_roles.sql`、`02_console_schema.sql`、`03_contract_lifecycle_log.sql`、`04_fn_apply_onboarding.sql`
+- **02の経緯（2026-10-07）**：旧`02_organization_alter.sql`（`organizations`への4列とCHECKの追加）は、Sobae_Works本体のテーブルの構造変更であるため、**本体のmigration（番号は本体側が決定。250想定）に移管**した。この番号は、03より前に必要となる`console`スキーマの作成（`02_console_schema.sql`）に再利用している。旧02のSQLは、このディレクトリのどのファイルにも含まれない（Consoleのrunnerが`public.organizations`を変更すると、本体のfingerprintが動くため）。旧02の内容はgit履歴に残っている。
 
 ## 4. ファイル分割の粒度
 
@@ -42,6 +43,7 @@ sql/migrations/NN_snake_case_description.sql
 - 一度Staging以降の環境に適用されたマイグレーションファイルは、内容を書き換えない
 - 適用後に修正が必要になった場合は、新しい番号の修正用マイグレーションファイルを追加する（例：`07_fix_organization_status_default.sql`でALTER文により直す）
 - ローカルでまだどの環境にも適用していない段階に限り、直前に自分が作成したファイルを編集してよい
+- **例外（2026-10-07、1回限りの再ベースライン）**：Consoleのオブジェクトを`public`から`console`スキーマへ分離するため、03〜10を直接書き直した。管理対象の環境（staging親・本番）には01のロール以外のConsole由来のオブジェクトが一切無く（staging親は2026-10-07に本体側が読み取りで確認）、書き直しの影響を受ける適用済みの環境が無いことが理由。test-onboarding（実験用の複製DB）に適用済みの旧`public`版は、新しいファイルで作り直す（DROPして再作成）。この例外は今回限りで、以後は上記の原則（適用後は新しい番号で追加）に戻る
 
 ## 6. 各ファイルの冒頭に含めるコメント
 
@@ -54,10 +56,19 @@ sql/migrations/NN_snake_case_description.sql
 
 ## 7. 適用記録
 
-各マイグレーション適用後、`schema_migration_log`テーブル（filename, applied_at, applied_by）に記録される。記録用のINSERT文は適用スクリプト側で自動化されるため、各マイグレーションファイルの末尾に含める必要はない（実装時に統一する）。
+各マイグレーション適用後、適用履歴（filename, checksum, applied_at, applied_by, fingerprintの前後など）が`console.migration_history`に記録される予定（Console側のrunner。**未実装**）。Sobae_Works本体の`sobae_meta.migration_history`とは別に管理する。記録用のINSERT文は適用スクリプト側で自動化されるため、各マイグレーションファイルの末尾に含める必要はない。
 
 ## 8. 特に厳守すること
 
 - Supabaseダッシュボードやpsqlからスキーマ変更を直接実行しない。スキーマ変更は必ずこのディレクトリのマイグレーションファイルを経由する
 - 1つのマイグレーションファイルに、無関係な複数の変更を混ぜない
 - 迷ったら新しいファイルを追加する。既存ファイルを書き直すより積み増しを優先する
+
+## 9. `console` スキーマの規約
+
+- Console所有のオブジェクト（`contract_lifecycle_log`、`fn_*`、`v_organization_summary`）は`console`スキーマに作る。Sobae_Works本体のテーブル（`organizations`等）は`public`のまま参照する
+- `console`のオブジェクトは、SQL・backendのどちらでも**`console.`で修飾**して参照する（`search_path`に頼らない）。SECURITY DEFINER関数の`set search_path = pg_catalog, public`は変えない
+- 各関数・ビュー・テーブルのファイルに、**明示的なrevoke**（`public, anon, authenticated, service_role`）を入れる。関数は所有者変更（`alter ... owner to`）の前にrevokeする。理由：PUBLIC/anonへのEXECUTEが付かないのは、作成者`postgres`のグローバル既定権限（本体Migration 215）に依存しているだけで、作成者が別ロールになると失われる（本体のMigration 230の事例）
+- 関数は`postgres`で作成する（`create or replace`は所有者・権限を維持する。`drop`して作り直すと既定権限が再適用される）
+- Data API（PostgREST）の公開スキーマに`console`を追加しない
+- `console`が参照する`public`の列（`organizations`の列など）を本体が変更・削除・型変更すると、ビュー・関数が壊れる。本体との約束事として、適用後の監査で依存関係（`pg_depend`）を確認する

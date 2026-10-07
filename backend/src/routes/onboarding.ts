@@ -10,6 +10,8 @@ import type { AuthVariables } from '../auth/middleware.js'
 // Payload contract mirrors sql/migrations/04_fn_apply_onboarding.sql's header
 // comment (fn_apply_onboarding/fn_dryrun_onboarding). Keep the two in sync —
 // there is no single source of truth yet, the SQL header says as much.
+// The functions live in the `console` schema — always schema-qualify
+// (console.fn_*), never rely on search_path.
 const POSTAL_CODE_RE = /^\d{7}$/
 // Shared by organization.login_code and initial_admin.login_id — both map to
 // Postgres CHECK constraints with the same pattern (organizations_login_code_
@@ -251,7 +253,7 @@ onboarding.post('/dry-run', zValidator('json', onboardingPayloadSchema, zodField
     const dbPayload = await toDbPayload(payload)
     const sql = getSql()
     const rows = await sql<{ result: DryRunResult }[]>`
-      select fn_dryrun_onboarding(${sql.json(dbPayload)}, ${appliedBy}) as result
+      select console.fn_dryrun_onboarding(${sql.json(dbPayload)}, ${appliedBy}) as result
     `
     const result = rows[0].result
     if (!result.valid) {
@@ -276,7 +278,7 @@ onboarding.post('/apply', zValidator('json', onboardingPayloadSchema, zodFieldEr
     const dbPayload = await toDbPayload(payload)
     const sql = getSql()
     const rows = await sql<{ result: ApplyResult }[]>`
-      select fn_apply_onboarding(${sql.json(dbPayload)}, ${appliedBy}) as result
+      select console.fn_apply_onboarding(${sql.json(dbPayload)}, ${appliedBy}) as result
     `
     return c.json({ organization: rows[0].result }, 201)
   } catch (err) {

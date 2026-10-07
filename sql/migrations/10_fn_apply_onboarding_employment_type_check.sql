@@ -8,16 +8,18 @@
 --       Postgres側のCHECK制約自体は変更せず残す（この関数を経由しない書き込みが
 --       将来あった場合の保険として機能する）。
 -- 作成日：2026-09-14
+-- 変更履歴：2026-10-07 consoleスキーマ化（再ベースライン。適用済みの管理環境が無いため既存ファイルを
+--       直接書き直した。詳細は README.md §5）。関数のロジックは無変更。
 -- 依存する既存オブジェクト：04_fn_apply_onboarding.sql（同じ関数をcreate or replaceで
 --       上書きする。関数本体はそちらのコピーに事前チェック1ブロックを追加しただけで、
 --       他のロジックは変更していない）
 -- 許可コードの出典：staff.employment_typeのCHECK制約定義（pg_get_constraintdefで
 --       2026-09-14に実データベースから直接確認）。介護保険の雇用形態区分
 --       （常勤専従・常勤兼務・非常勤専従・非常勤兼務）をコード化したものと推定。
--- ロールバック方針：04_fn_apply_onboarding.sqlの内容でcreate or replaceし直す
+-- ロールバック方針：04_fn_apply_onboarding.sqlの内容でcreate or replaceし直す（console.fn_apply_onboarding）
 --       （事前チェックのブロックを取り除いたバージョンに戻す）。
 
-create or replace function fn_apply_onboarding(p_payload jsonb, p_applied_by text)
+create or replace function console.fn_apply_onboarding(p_payload jsonb, p_applied_by text)
 returns jsonb
 language plpgsql
 security definer
@@ -44,7 +46,7 @@ begin
     raise exception 'application_id is required' using errcode = '22023';
   end if;
 
-  if exists (select 1 from contract_lifecycle_log where application_id = v_application_id) then
+  if exists (select 1 from console.contract_lifecycle_log where application_id = v_application_id) then
     raise exception 'application % has already been applied', v_application_id
       using errcode = '23505';
   end if;
@@ -177,7 +179,7 @@ begin
   )
   returning id into v_system_user_id;
 
-  insert into contract_lifecycle_log (
+  insert into console.contract_lifecycle_log (
     organization_id, management_number, application_id, event_type, status_before, status_after, contract_date, applied_by
   )
   values (
