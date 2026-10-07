@@ -103,6 +103,7 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
     assert.equal(await cmdStatus(run()), 0)
     assert.match(text(), /\[OK\] 接続先の照合/)
     assert.match(text(), /未初期化/)
+    assert.match(text(), /\[OK\] 所有者ロールへの SET 権限/)
     lines = []
     assert.equal(await cmdPlan(run()), 1)
     lines = []
