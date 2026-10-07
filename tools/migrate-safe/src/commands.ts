@@ -18,6 +18,9 @@ export interface RunOptions {
   // CONSOLE_MIGRATE_AUTOTEST=1: skips the git guard and the typed confirmation, and ONLY when
   // the target is a loopback host. Ignored for any remote target.
   autotest: boolean
+  // Test-only (never set by the CLI): skip just the git guard so the confirmation step can be
+  // exercised. Like autotest it is honoured for loopback targets only.
+  skipGitGuardForTests?: boolean
   confirm: (code: string) => Promise<boolean>
   out: (line: string) => void
 }
@@ -31,6 +34,11 @@ interface Inspection {
   invalidNames: string[]
   fingerprint: string
   analysis: Analysis | null
+}
+
+// The autotest escape hatches (skip git guard / confirmation) apply to loopback targets only.
+export function autotestApplies(flag: boolean | undefined, conn: Pick<ConnectionInfo, 'loopback'>): boolean {
+  return Boolean(flag) && conn.loopback
 }
 
 const OK = '[OK]'
@@ -69,6 +77,7 @@ async function inspect(sql: postgres.Sql, conn: ConnectionInfo, config: Environm
     const [{ has }] = await tx<{ has: boolean }[]>`select to_regclass('sobae_meta.database_state') is not null as has`
     if (has) {
       const rows = await tx<{ id: string }[]>`select database_id::text as id from sobae_meta.database_state`
+      if (rows.length > 1) throw new Error('sobae_meta.database_state に複数行があります（想定外の状態のため停止します）')
       databaseId = rows.length === 1 ? rows[0].id : null
     }
 
@@ -183,11 +192,11 @@ export async function cmdVerify(opts: RunOptions): Promise<number> {
 
 // ---------------------------------------------------------------- shared write guards
 function writeGuard(opts: RunOptions, conn: ConnectionInfo): { ok: boolean; commit: string | null } {
-  if (opts.autotest && conn.loopback) {
+  if (autotestApplies(opts.autotest || opts.skipGitGuardForTests, conn)) {
     opts.out('（autotest: ループバックのため git ガードを省略します）')
     return { ok: true, commit: null }
   }
-  if (opts.autotest && !conn.loopback) {
+  if (opts.autotest && !autotestApplies(opts.autotest, conn)) {
     opts.out('（CONSOLE_MIGRATE_AUTOTEST は、ループバック以外では無視します）')
   }
   const info = collectGitInfo(opts.repoRoot, join('sql', 'migrations'))
@@ -197,7 +206,7 @@ function writeGuard(opts: RunOptions, conn: ConnectionInfo): { ok: boolean; comm
 }
 
 async function confirmed(opts: RunOptions, conn: ConnectionInfo): Promise<boolean> {
-  if (opts.autotest && conn.loopback) return true
+  if (autotestApplies(opts.autotest, conn)) return true
   const code = generateCode()
   const ok = await opts.confirm(code)
   if (!ok) opts.out(`${NG} 確認コードが一致しません。中止します`)

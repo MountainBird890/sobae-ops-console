@@ -9,6 +9,7 @@ import { after, before, describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import postgres from 'postgres'
 import { cmdInit, cmdMigrate, cmdPlan, cmdStatus, cmdVerify, type RunOptions } from '../src/commands.ts'
+import { ConfirmationAborted } from '../src/confirm.ts'
 import { isLoopbackHost } from '../src/conn.ts'
 
 const ADMIN_URL = process.env.CONSOLE_TEST_LOCAL_DB_URL
@@ -35,7 +36,7 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
   let lines: string[] = []
   let publicFingerprintBefore: string | null = null
 
-  const run = (environment = 'local', url = testUrl): RunOptions => ({
+  const run = (environment = 'local', url = testUrl, extra: Partial<RunOptions> = {}): RunOptions => ({
     environment,
     url,
     migrationsDir: dir,
@@ -44,7 +45,11 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
     autotest: true,
     confirm: async () => true,
     out: (l) => lines.push(l),
+    ...extra,
   })
+  // The confirmation step really runs (only the git guard is skipped; loopback target).
+  const prompting = (confirm: (code: string) => Promise<boolean>) =>
+    run('local', testUrl, { autotest: false, skipGitGuardForTests: true, confirm })
   const text = () => lines.join('\n')
   const history = async () => await sql<{ migration_version: number; adopted: boolean }[]>`select migration_version, adopted from console.migration_history order by 1`
   // Runs Sobae_Works' own fingerprint.sql (read-only SELECT) so "the runner never touches public"
@@ -105,6 +110,20 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
     assert.match(text(), /init/)
   })
 
+  it('init with a wrong confirmation code, or an abort (Ctrl-C), changes nothing', async () => {
+    lines = []
+    assert.equal(await cmdInit(prompting(async () => false)), 1)
+    assert.match(text(), /確認コードが一致しません/)
+    assert.equal((await sql`select to_regclass('console.migration_history') as t`)[0].t, null)
+    assert.equal((await sql`select to_regclass('console.contract_lifecycle_log') as t`)[0].t, null)
+    await assert.rejects(cmdInit(prompting(async () => { throw new ConfirmationAborted() })), ConfirmationAborted)
+    assert.equal((await sql`select to_regclass('console.migration_history') as t`)[0].t, null)
+    // a prompt is actually shown a code to type (the callback receives it)
+    let seen = ''
+    await cmdInit(prompting(async (code) => { seen = code; return false }))
+    assert.match(seen, /^[A-Z2-9]{6}$/)
+  })
+
   it('init adopts 01 and is idempotent', async () => {
     lines = []
     assert.equal(await cmdInit(run()), 0)
@@ -114,6 +133,18 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
     assert.equal(await cmdInit(run()), 0)
     assert.match(text(), /既に初期化済み/)
     assert.equal((await history()).length, 1)
+  })
+
+  it('migrate with a wrong confirmation code, or an abort (Ctrl-C), applies nothing', async () => {
+    lines = []
+    assert.equal(await cmdMigrate(prompting(async () => false)), 1)
+    assert.match(text(), /確認コードが一致しません/)
+    assert.equal((await history()).length, 1)
+    await assert.rejects(cmdMigrate(prompting(async () => { throw new ConfirmationAborted() })), ConfirmationAborted)
+    assert.equal((await history()).length, 1)
+    assert.equal((await sql`select to_regclass('console.contract_lifecycle_log') as t`)[0].t, null)
+    lines = []
+    assert.equal(await cmdVerify(run()), 0)
   })
 
   it('plan lists 02..10 as pending and passes every check', async () => {

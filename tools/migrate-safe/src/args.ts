@@ -1,3 +1,5 @@
+import { KNOWN_ENVIRONMENTS } from './env.ts'
+
 export const COMMANDS = ['init', 'status', 'plan', 'migrate', 'verify'] as const
 export type CommandName = (typeof COMMANDS)[number]
 
@@ -5,7 +7,7 @@ export function usage(): string {
   return [
     '使い方: tsx src/cli.ts <command> --environment=<name>',
     `  command: ${COMMANDS.join(' | ')}`,
-    '  --environment=<name> は必須です（staging | local。production は使えません）',
+    `  --environment=<name> は必須です（${KNOWN_ENVIRONMENTS.join(' | ')}。production は使えません）`,
     '  接続文字列は、環境変数 CONSOLE_ADMIN_DATABASE_URL から読みます',
   ].join('\n')
 }

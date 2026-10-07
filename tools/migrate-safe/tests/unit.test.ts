@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from '../src/args.ts'
 import { extractProjectRef, isLoopbackHost, parseConnection } from '../src/conn.ts'
 import { assertEnvironmentName, evaluateGate, type EnvironmentsConfig } from '../src/env.ts'
+import { autotestApplies } from '../src/commands.ts'
 import { analyze, parseFilename, sha256Hex, type HistoryRow, type MigrationFile } from '../src/files.ts'
 import { collectGitInfo, evaluateGitGuard, type GitInfo } from '../src/git.ts'
 import { maskSecrets } from '../src/mask.ts'
@@ -17,12 +18,18 @@ const MIGRATIONS_DIR = join(HERE, '..', '..', '..', 'sql', 'migrations')
 const REF = 'abcdefghijklmnopqrst' // 20 chars, a stand-in for a project ref
 const STAGING_ID = '11111111-1111-1111-1111-111111111111'
 const PROD_ID = '99999999-9999-9999-9999-999999999999'
+const TEST_REF = 'tttttttttttttttttttt' // 20 chars, a stand-in for the test-onboarding project ref
 const CONFIG: EnvironmentsConfig = {
-  environments: { staging: { database_id: STAGING_ID, project_ref: REF }, local: { loopback_only: true } },
+  environments: {
+    staging: { database_id: STAGING_ID, project_ref: REF },
+    'test-onboarding': { project_ref: TEST_REF, require_no_database_id: true },
+    local: { loopback_only: true },
+  },
   refuse_database_ids: [PROD_ID],
 }
 const poolerConn = parseConnection(`postgresql://postgres.${REF}:secretpw@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`)
 const localConn = parseConnection('postgresql://postgres:secretpw@127.0.0.1:5433/postgres')
+const testConn = parseConnection(`postgresql://postgres.${TEST_REF}:secretpw@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`)
 
 describe('maskSecrets', () => {
   it('masks credentials in URLs, including the pooler user (which carries the project ref)', () => {
@@ -146,9 +153,10 @@ describe('environment gate', () => {
 
   it('refuses production and unknown environment names before connecting', () => {
     assert.throws(() => assertEnvironmentName('production'), /production/)
-    assert.throws(() => assertEnvironmentName('test-onboarding'), /未知/)
+    assert.throws(() => assertEnvironmentName('some-other-env'), /未知/)
     assert.throws(() => assertEnvironmentName(''), /未知/)
     assert.doesNotThrow(() => assertEnvironmentName('staging'))
+    assert.doesNotThrow(() => assertEnvironmentName('test-onboarding'))
     assert.doesNotThrow(() => assertEnvironmentName('local'))
   })
   it('staging: matches only on the exact database_id (and project_ref)', () => {
@@ -170,10 +178,38 @@ describe('environment gate', () => {
     assert.equal(gate('local', 'anything', localConn).ok, true)
     assert.equal(gate('local', null, poolerConn).status, 'loopback_required')
   })
+  it('test-onboarding: accepted only for a database WITHOUT a registered database_id and a matching project_ref', () => {
+    assert.equal(gate('test-onboarding', null, testConn).ok, true)
+    assert.equal(gate('test-onboarding', null, testConn).status, 'match')
+  })
+  it('test-onboarding: a database that has a database_id (staging parent / production) is never accepted under this name', () => {
+    assert.equal(gate('test-onboarding', STAGING_ID, testConn).status, 'database_id_registered')
+    assert.equal(gate('test-onboarding', 'any-other-id', testConn).status, 'database_id_registered')
+    // the production id is refused outright, before anything else
+    assert.equal(gate('test-onboarding', PROD_ID, testConn).status, 'refused_database_id')
+    // even when the staging parent is reached with the test-onboarding project ref in the URL
+    assert.equal(gate('test-onboarding', STAGING_ID, poolerConn).ok, false)
+  })
+  it('test-onboarding: refuses a different project (staging parent URL) and an unreadable ref (fail closed)', () => {
+    assert.equal(gate('test-onboarding', null, poolerConn).status, 'project_ref_mismatch') // staging parent ref
+    assert.equal(gate('test-onboarding', null, localConn).status, 'project_ref_mismatch') // no ref in a loopback URL
+  })
+  it('staging profile still refuses the test-onboarding database (no database_id there)', () => {
+    assert.equal(gate('staging', null, testConn).status, 'no_database_state')
+  })
+  it('test-onboarding: configuration errors are reported (no project_ref, or both database_id and require_no_database_id)', () => {
+    const noRef: EnvironmentsConfig = { environments: { 'test-onboarding': { require_no_database_id: true } }, refuse_database_ids: [] }
+    assert.equal(evaluateGate({ environment: 'test-onboarding', config: noRef, databaseId: null, connection: testConn }).status, 'config_error')
+    const both: EnvironmentsConfig = { environments: { 'test-onboarding': { project_ref: TEST_REF, database_id: 'x', require_no_database_id: true } }, refuse_database_ids: [] }
+    assert.equal(evaluateGate({ environment: 'test-onboarding', config: both, databaseId: null, connection: testConn }).status, 'config_error')
+  })
   it('messages never contain database_id or project_ref values', () => {
-    const results = [gate('staging', 'other-id'), gate('staging', PROD_ID), gate('staging', STAGING_ID, localConn), gate('staging', STAGING_ID)]
+    const results = [
+      gate('staging', 'other-id'), gate('staging', PROD_ID), gate('staging', STAGING_ID, localConn), gate('staging', STAGING_ID),
+      gate('test-onboarding', STAGING_ID, testConn), gate('test-onboarding', null, poolerConn), gate('test-onboarding', null, testConn),
+    ]
     for (const r of results) {
-      for (const secret of [STAGING_ID, PROD_ID, REF, 'other-id']) assert.ok(!r.detail.includes(secret), r.detail)
+      for (const secret of [STAGING_ID, PROD_ID, REF, TEST_REF, 'other-id']) assert.ok(!r.detail.includes(secret), r.detail)
     }
   })
   it('reports configuration errors (unknown profile, staging id equal to a refused id)', () => {
@@ -219,5 +255,19 @@ describe('argument parsing', () => {
     assert.throws(() => parseArgs(['status', '--environment=staging', '--environment=local']), /複数回/)
     assert.throws(() => parseArgs(['status', '--environment=staging', '--force']), /未知の引数/)
     assert.throws(() => parseArgs(['status', '--env=staging']), /未知の引数/)
+  })
+})
+
+describe('autotest escape hatch', () => {
+  it('applies only to loopback targets and only when requested', () => {
+    assert.equal(autotestApplies(true, { loopback: true }), true)
+    assert.equal(autotestApplies(true, { loopback: false }), false)
+    assert.equal(autotestApplies(false, { loopback: true }), false)
+    assert.equal(autotestApplies(undefined, { loopback: true }), false)
+  })
+  it('is never honoured for the connections used against Supabase', () => {
+    assert.equal(autotestApplies(true, poolerConn), false)
+    assert.equal(autotestApplies(true, testConn), false)
+    assert.equal(autotestApplies(true, localConn), true)
   })
 })
