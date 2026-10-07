@@ -10,6 +10,7 @@ import { autotestApplies } from '../src/commands.ts'
 import { analyze, parseFilename, sha256Hex, type HistoryRow, type MigrationFile } from '../src/files.ts'
 import { collectGitInfo, evaluateGitGuard, type GitInfo } from '../src/git.ts'
 import { maskSecrets } from '../src/mask.ts'
+import { describeSetRole, evaluateSetRole, SET_ROLE_REQUIRED } from '../src/prereq.ts'
 import { findForbidden, stripSqlNoise } from '../src/sqlscan.ts'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -269,5 +270,33 @@ describe('autotest escape hatch', () => {
     assert.equal(autotestApplies(true, poolerConn), false)
     assert.equal(autotestApplies(true, testConn), false)
     assert.equal(autotestApplies(true, localConn), true)
+  })
+})
+
+describe('SET ROLE prerequisite', () => {
+  const OWNER = 'sobae_onboarding_executor'
+  it('passes when the connected role can SET ROLE to the owner role', () => {
+    const c = evaluateSetRole([{ rolname: OWNER, can_set: true }])
+    assert.deepEqual(c, { ok: true, blocked: [], missing: [] })
+    assert.match(describeSetRole(c, 'postgres'), /SET ROLE できます/)
+  })
+  it('fails when the role exists but SET is not granted (ADMIN OPTION only, the 2026-10-07 staging parent state)', () => {
+    const c = evaluateSetRole([{ rolname: OWNER, can_set: false }])
+    assert.equal(c.ok, false)
+    assert.deepEqual(c.blocked, [OWNER])
+    const msg = describeSetRole(c, 'postgres')
+    assert.match(msg, /SET ROLE できません/)
+    assert.match(msg, /with inherit true, set true/)
+    assert.match(msg, /承認/)
+  })
+  it('does not treat a missing role as a SET failure (init reports missing roles itself)', () => {
+    const c = evaluateSetRole([])
+    assert.equal(c.ok, true)
+    assert.deepEqual(c.missing, [...SET_ROLE_REQUIRED])
+    assert.match(describeSetRole(c, 'postgres'), /まだありません/)
+  })
+  it('ignores roles that are not required', () => {
+    const c = evaluateSetRole([{ rolname: 'some_other_role', can_set: false }, { rolname: OWNER, can_set: true }])
+    assert.equal(c.ok, true)
   })
 })

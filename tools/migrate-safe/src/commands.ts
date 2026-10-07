@@ -6,6 +6,7 @@ import { analyze, loadMigrationFiles, sha256Hex, type Analysis, type HistoryRow,
 import { computeFingerprint } from './fingerprint.ts'
 import { collectGitInfo, evaluateGitGuard } from './git.ts'
 import { ADOPTED_FILE, HISTORY_DDL, LOCK_KEY, REQUIRED_ROLES } from './history.ts'
+import { describeSetRole, evaluateSetRole, SET_ROLE_REQUIRED, type SetRoleCheck, type SetRoleRow } from './prereq.ts'
 import { join } from 'node:path'
 
 export interface RunOptions {
@@ -34,6 +35,7 @@ interface Inspection {
   invalidNames: string[]
   fingerprint: string
   analysis: Analysis | null
+  setRole: SetRoleCheck
 }
 
 // The autotest escape hatches (skip git guard / confirmation) apply to loopback targets only.
@@ -91,9 +93,18 @@ async function inspect(sql: postgres.Sql, conn: ConnectionInfo, config: Environm
         from console.migration_history order by migration_version`
     }
 
+    // SET ROLE prerequisite (PostgreSQL 16+: the SET option of the membership; before 16: MEMBER).
+    const setRows = await tx<SetRoleRow[]>`
+      select r.rolname::text as rolname,
+             case when current_setting('server_version_num')::int >= 160000
+                  then pg_has_role(current_user, r.oid, 'SET')
+                  else pg_has_role(current_user, r.oid, 'MEMBER') end as can_set
+      from pg_roles r where r.rolname = any(${[...SET_ROLE_REQUIRED]})`
+    const setRole = evaluateSetRole(setRows)
+
     const fingerprint = await computeFingerprint(tx)
     const analysis = history ? analyze(files, invalidNames, history) : null
-    return { role, databaseId, gate, history, files, invalidNames, fingerprint, analysis }
+    return { role, databaseId, gate, history, files, invalidNames, fingerprint, analysis, setRole }
   })
 }
 
@@ -112,12 +123,20 @@ function printHeader(opts: RunOptions, ins: Inspection): void {
   opts.out(`環境: ${opts.environment}`)
   opts.out(`${ins.gate.ok ? OK : NG} 接続先の照合: ${ins.gate.detail}`)
   opts.out(`${ins.role === 'postgres' ? OK : NG} 接続ロール: ${ins.role}${ins.role === 'postgres' ? '' : '（postgres であることが必要です）'}`)
+  opts.out(`${ins.setRole.ok ? OK : NG} 所有者ロールへの SET 権限: ${describeSetRole(ins.setRole, ins.role)}`)
 }
 
 function commonFailures(ins: Inspection): string[] {
   const reasons: string[] = []
   if (!ins.gate.ok) reasons.push('接続先の照合に失敗しました')
   if (ins.role !== 'postgres') reasons.push('接続ロールが postgres ではありません')
+  return reasons
+}
+
+// Checked only by the commands that write (init, migrate) and by plan ("migrate possible?").
+function writeFailures(ins: Inspection): string[] {
+  const reasons = commonFailures(ins)
+  if (!ins.setRole.ok) reasons.push('所有者ロールへの SET 権限がありません')
   return reasons
 }
 
@@ -146,7 +165,7 @@ export async function cmdPlan(opts: RunOptions): Promise<number> {
   return await withConnection(opts, async (sql, conn, config) => {
     const ins = await inspect(sql, conn, config, opts)
     printHeader(opts, ins)
-    const reasons = commonFailures(ins)
+    const reasons = writeFailures(ins)
     if (!ins.history || !ins.analysis) {
       opts.out(`${NG} 履歴が未初期化です。先に init を実行してください`)
       return 1
@@ -218,7 +237,7 @@ export async function cmdInit(opts: RunOptions): Promise<number> {
   return await withConnection(opts, async (sql, conn, config) => {
     const ins = await inspect(sql, conn, config, opts)
     printHeader(opts, ins)
-    if (commonFailures(ins).length > 0) return 1
+    if (writeFailures(ins).length > 0) return 1
     if (ins.history && ins.history.length > 0) {
       opts.out(`${OK} 既に初期化済みです（履歴 ${ins.history.length} 行）。何もしません`)
       return 0
@@ -265,7 +284,7 @@ export async function cmdMigrate(opts: RunOptions): Promise<number> {
   return await withConnection(opts, async (sql, conn, config) => {
     const ins = await inspect(sql, conn, config, opts)
     printHeader(opts, ins)
-    if (commonFailures(ins).length > 0) return 1
+    if (writeFailures(ins).length > 0) return 1
     if (!ins.history || !ins.analysis) {
       opts.out(`${NG} 履歴が未初期化です。先に init を実行してください`)
       return 1
