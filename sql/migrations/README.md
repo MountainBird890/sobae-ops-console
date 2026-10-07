@@ -75,4 +75,4 @@ runnerは、チェックサム、番号の欠番・重複、禁止SQL（`BEGIN`/
 - 関数は`postgres`で作成する（`create or replace`は所有者・権限を維持する。`drop`して作り直すと既定権限が再適用される）
 - runnerを実行する`postgres`は、`sobae_onboarding_executor`へ`SET ROLE`できる必要がある（`alter … owner to`の条件。PostgreSQL 16以降のrole membershipのSETオプション）。環境によっては`ADMIN OPTION`のみで`SET`が無いことがある（2026-10-07のstaging親）。runnerの`init`/`migrate`/`plan`/`status`が事前に検査し、無ければ拒否する。付与（`grant sobae_onboarding_executor to postgres with inherit true, set true;`）はDBへの書き込みなので、承認を得て、runnerの外で実行する。本番展開の前提チェックリストにも含める
 - Data API（PostgREST）の公開スキーマに`console`を追加しない
-- `console`が参照する`public`の列（`organizations`の列など）を本体が変更・削除・型変更すると、ビュー・関数が壊れる。本体との約束事として、適用後の監査で依存関係（`pg_depend`）を確認する
+- `console`が参照する`public`の列（`organizations`の列など）を本体が変更・削除・型変更すると、ビュー・関数が壊れる。`v_organization_summary`は`id, name, management_number, status, contract_start_date, contract_end_date`に加えて、migration 11以降は`is_active`も参照する。本体との約束事として、適用後の監査で依存関係（`pg_depend`）を確認する

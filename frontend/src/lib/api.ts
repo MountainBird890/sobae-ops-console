@@ -66,12 +66,14 @@ async function request<T>(path: string, init: { method?: string; body?: unknown 
 
 export type OrganizationStatus = 'active' | 'suspended' | 'terminated'
 
+// Organizations that existed before migration 250 have no management number / contract start
+// date, and a NULL status when they are not active ("needs review"). Show them as "—".
 export interface Organization {
   id: string
   name: string
-  management_number: string
-  status: OrganizationStatus
-  contract_start_date: string
+  management_number: string | null
+  status: OrganizationStatus | null
+  contract_start_date: string | null
   contract_end_date: string | null
 }
 
@@ -79,6 +81,8 @@ export interface OrganizationSummary {
   active: number
   suspended: number
   terminated: number
+  // Organizations whose status could not be determined (legacy + not active).
+  unconfirmed: number
   total: number
 }
 

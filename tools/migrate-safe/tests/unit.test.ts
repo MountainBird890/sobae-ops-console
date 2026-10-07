@@ -96,7 +96,7 @@ describe('forbidden SQL scan', () => {
     assert.equal(stripSqlNoise('do $$ begin').unterminated !== null, true)
     assert.equal(stripSqlNoise('/* open').unterminated !== null, true)
   })
-  it('every existing Console migration (01..10) passes the scan', () => {
+  it('every existing Console migration (01..11) passes the scan', () => {
     const names = readdirSync(MIGRATIONS_DIR).filter((n) => n.endsWith('.sql'))
     assert.ok(names.length >= 10)
     for (const n of names) {
