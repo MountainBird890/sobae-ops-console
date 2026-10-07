@@ -3,12 +3,15 @@
 --       新規オンボーディングとして扱う（設計書の方針、ステータスの巻き戻しはしない）。
 -- 作成日：2026-08-17（2026-08-19: 実スキーマ確認結果に合わせて全面改訂。テーブル名を
 --       organizations に修正し、app._procedure_context対応・is_active同期を追加）
--- 依存する既存オブジェクト：01_roles.sql, 02_organization_alter.sql, 03_contract_lifecycle_log.sql
--- ロールバック方針：drop function if exists fn_reactivate_organization(uuid, text, text);
+-- 変更履歴：2026-10-07 consoleスキーマ化（再ベースライン。適用済みの管理環境が無いため既存ファイルを
+--       直接書き直した。詳細は README.md §5）。関数のロジックは無変更。
+-- 依存する既存オブジェクト：01_roles.sql, 02_console_schema.sql, 03_contract_lifecycle_log.sql、
+--       および本体のmigration（organizationsの4列とCHECK。旧02の内容。番号は本体側が決定、250想定）
+-- ロールバック方針：drop function if exists console.fn_reactivate_organization(uuid, text, text);
 --
 -- app._procedure_context / is_active同期は06_fn_suspend_organization.sql参照。
 
-create or replace function fn_reactivate_organization(
+create or replace function console.fn_reactivate_organization(
   p_organization_id uuid,
   p_reason text,
   p_applied_by text
@@ -47,7 +50,7 @@ begin
   set status = 'active', is_active = true
   where id = p_organization_id;
 
-  insert into contract_lifecycle_log (
+  insert into console.contract_lifecycle_log (
     organization_id, management_number, event_type, status_before, status_after, reason, applied_by
   )
   select p_organization_id, o.management_number, 'reactivated', v_status_before, 'active', p_reason, p_applied_by
@@ -61,5 +64,8 @@ begin
 end;
 $$;
 
-alter function fn_reactivate_organization(uuid, text, text) owner to sobae_onboarding_executor;
-grant execute on function fn_reactivate_organization(uuid, text, text) to sobae_ops_executor;
+-- 既定権限（作成者postgresのグローバル既定。本体Migration 215）に頼らず、明示的にrevokeする
+-- （所有者変更の前に実行）。
+revoke execute on function console.fn_reactivate_organization(uuid, text, text) from public, anon, authenticated, service_role;
+alter function console.fn_reactivate_organization(uuid, text, text) owner to sobae_onboarding_executor;
+grant execute on function console.fn_reactivate_organization(uuid, text, text) to sobae_ops_executor;
