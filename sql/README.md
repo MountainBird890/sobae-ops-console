@@ -40,7 +40,9 @@ this.
   `02_organization_alter.sql`, now in git history, explains why). `fn_terminate_organization`
   can terminate NULL-status organizations on purpose; `fn_suspend_organization` /
   `fn_reactivate_organization` reject them.
-- The migration history table (`console.migration_history`, see
-  `migrations/README.md` §7) and the Console-side runner — not yet implemented.
+- Applying to a real environment: done with the Console-side runner
+  (`../tools/migrate-safe/`, history in `console.migration_history`, see
+  `migrations/README.md` §7). It has been verified locally only; running it against
+  the staging parent (S4) needs the user's approval and Sobae_Works' migration 250 first.
 - Production apply. Per the project's own rules: verify in staging first,
   never hand-run untested SQL against Production.
