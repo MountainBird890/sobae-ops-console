@@ -13,11 +13,16 @@ import type { AuthVariables } from '../auth/middleware.js'
 // The functions live in the `console` schema — always schema-qualify
 // (console.fn_*), never rely on search_path.
 const POSTAL_CODE_RE = /^\d{7}$/
-// Shared by organization.login_code and initial_admin.login_id — both map to
-// Postgres CHECK constraints with the same pattern (organizations_login_code_
-// format_check, system_users_login_id_format_check; confirmed via
-// pg_get_constraintdef 2026-09-14).
+// initial_admin.login_id maps to a Postgres CHECK constraint with this pattern
+// (system_users_login_id_format_check; confirmed via pg_get_constraintdef
+// 2026-09-14). organizations.login_code has the same pattern and is derived from
+// the management number (see MANAGEMENT_NUMBER_RE below).
 const LOGIN_ID_RE = /^[a-z0-9-]+$/
+// 管理番号は organizations.login_code（本体のログインID自動提案が使う法人コード）の元になる。
+// login_code の制約（半角英小文字・数字・ハイフン、varchar(30)、大文字小文字を区別しない一意）を
+// 満たすように、管理番号の入力段階で形式と長さを検証する（大文字は許可し、login_code へは小文字化して渡す）。
+const MANAGEMENT_NUMBER_RE = /^[A-Za-z0-9-]+$/
+const MANAGEMENT_NUMBER_MAX = 30
 const ROLE_CODES = ['admin', 'supervisor', 'staff'] as const
 // staff.employment_type CHECK constraint's allowed values (confirmed via
 // pg_get_constraintdef against the real Sobae_Works schema, 2026-09-14) —
@@ -31,40 +36,51 @@ const serviceRegistrationSchema = z.object({
 })
 
 const officeSchema = z.object({
-  code: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'),
-  name: z.string().trim().min(1, '必須項目です').max(200, '200文字以内で入力してください'),
-  postal_code: z.string().trim().regex(POSTAL_CODE_RE, '7桁の数字で入力してください').optional(),
-  address: z.string().trim().min(1, '1文字以上で入力してください').max(300, '300文字以内で入力してください').optional(),
-  phone: z.string().trim().min(1, '1文字以上で入力してください').max(30, '30文字以内で入力してください').optional(),
-  fax: z.string().trim().min(1, '1文字以上で入力してください').max(30, '30文字以内で入力してください').optional(),
-  email: z.email('メールアドレスの形式で入力してください').optional(),
+  // 長さの上限は本体の列に合わせる: offices.code varchar(20)、offices.name varchar(100)、phone/fax varchar(20)。
+  code: z.string().trim().min(1, '必須項目です').max(20, '20文字以内で入力してください'),
+  name: z.string().trim().min(1, '必須項目です').max(100, '100文字以内で入力してください'),
+  // 法人・事業所の項目はFAXを除き全部必須（2026-09-18打合せ決定、REQ-0001 SEC-003）。display_name は画面から
+  // 非表示にするが、DBの列は残すため任意のまま受け付ける。
+  postal_code: z.string().trim().regex(POSTAL_CODE_RE, '7桁の数字で入力してください'),
+  address: z.string().trim().min(1, '必須項目です').max(300, '300文字以内で入力してください'),
+  phone: z.string().trim().min(1, '必須項目です').max(20, '20文字以内で入力してください'),
+  // FAXは持たない事業所があるため任意（2026-10-08、shimo判断）。
+  fax: z.string().trim().min(1, '1文字以上で入力してください').max(20, '20文字以内で入力してください').optional(),
+  email: z.email('メールアドレスの形式で入力してください'),
   display_name: z.string().trim().min(1, '1文字以上で入力してください').max(200, '200文字以内で入力してください').optional(),
   service_registrations: z.array(serviceRegistrationSchema).default([]),
 })
 
 const organizationSchema = z.object({
   name: z.string().trim().min(1, '必須項目です').max(200, '200文字以内で入力してください'),
-  login_code: z.string().trim().regex(LOGIN_ID_RE, '半角英小文字・数字・ハイフンのみ使用できます').max(50, '50文字以内で入力してください').optional(),
-  postal_code: z.string().trim().regex(POSTAL_CODE_RE, '7桁の数字で入力してください').optional(),
-  address: z.string().trim().min(1, '1文字以上で入力してください').max(300, '300文字以内で入力してください').optional(),
-  phone: z.string().trim().min(1, '1文字以上で入力してください').max(30, '30文字以内で入力してください').optional(),
+  // login_code は入力として受け取らない（画面から削除）。toDbPayload が管理番号から導出する。
+  postal_code: z.string().trim().regex(POSTAL_CODE_RE, '7桁の数字で入力してください'),
+  address: z.string().trim().min(1, '必須項目です').max(300, '300文字以内で入力してください'),
+  phone: z.string().trim().min(1, '必須項目です').max(30, '30文字以内で入力してください'),
+  // FAXは持たない事業所があるため任意（2026-10-08、shimo判断）。
   fax: z.string().trim().min(1, '1文字以上で入力してください').max(30, '30文字以内で入力してください').optional(),
-  email: z.email('メールアドレスの形式で入力してください').optional(),
-  management_number: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'),
+  email: z.email('メールアドレスの形式で入力してください'),
+  management_number: z
+    .string()
+    .trim()
+    .min(1, '必須項目です')
+    .max(MANAGEMENT_NUMBER_MAX, `${MANAGEMENT_NUMBER_MAX}文字以内で入力してください`)
+    .regex(MANAGEMENT_NUMBER_RE, '半角英数字とハイフンのみ使用できます'),
   contract_start_date: z.iso.date('日付の形式（YYYY-MM-DD）で入力してください'),
 })
 
 const initialAdminSchema = z.object({
-  office_code: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'),
-  last_name: z.string().trim().min(1, '必須項目です').max(100, '100文字以内で入力してください'),
-  first_name: z.string().trim().min(1, '必須項目です').max(100, '100文字以内で入力してください'),
-  last_name_kana: z.string().trim().min(1, '1文字以上で入力してください').max(100, '100文字以内で入力してください').optional(),
-  first_name_kana: z.string().trim().min(1, '1文字以上で入力してください').max(100, '100文字以内で入力してください').optional(),
+  office_code: z.string().trim().min(1, '必須項目です').max(20, '20文字以内で入力してください'),
+  last_name: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'), // staff.last_name varchar(50)
+  first_name: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'), // staff.first_name varchar(50)
+  // 姓名（カナ）は必須（本体のログインID自動生成に使う、2026-09-18打合せ決定）。
+  last_name_kana: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'), // staff.last_name_kana varchar(50)
+  first_name_kana: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'), // staff.first_name_kana varchar(50)
   // 許可コードはDBのCHECK制約由来（staff_employment_type_check）。フロント側の
   // 入力欄はまだ自由入力のままなので、不正値は「雇用形態の値が不正です」としか
   // 出せない。選択式UIへの変更は別課題（技術実績台帳15章参照、本対応では未着手）。
   employment_type: z.enum(EMPLOYMENT_TYPE_CODES, { message: '雇用形態の値が不正です' }).optional(),
-  phone: z.string().trim().min(1, '1文字以上で入力してください').max(30, '30文字以内で入力してください').optional(),
+  phone: z.string().trim().min(1, '1文字以上で入力してください').max(20, '20文字以内で入力してください').optional(),
   email: z.email('メールアドレスの形式で入力してください').optional(),
   postal_code: z.string().trim().regex(POSTAL_CODE_RE, '7桁の数字で入力してください').optional(),
   address: z.string().trim().min(1, '1文字以上で入力してください').max(300, '300文字以内で入力してください').optional(),
@@ -115,6 +131,9 @@ async function toDbPayload(payload: OnboardingPayload) {
   const password_hash = await bcrypt.hash(password, 12)
   return {
     ...payload,
+    // ログインコードは管理番号に一本化: 本体は organizations.login_code から職員のログインIDを提案する
+    // ため、空のままにせず、管理番号の小文字を設定する（形式・長さは organizationSchema で検証済み）。
+    organization: { ...payload.organization, login_code: payload.organization.management_number.toLowerCase() },
     initial_admin: { ...adminRest, password_hash },
   }
 }
@@ -180,7 +199,9 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   staff_postal_code_format_check: '初期管理者の郵便番号は半角数字7桁で入力してください。',
   staff_role_check: '権限の指定が不正です。',
   system_users_login_id_format_check: 'ログインIDの形式が不正です。半角英小文字・数字・ハイフンのみ使用できます。',
-  organizations_login_code_format_check: 'ログインコードの形式が不正です。半角英小文字・数字・ハイフンのみ使用できます。',
+  organizations_login_code_format_check: '管理番号の形式が不正です。半角英数字とハイフンのみ使用できます。',
+  // login_code は管理番号から導出するため、重複は管理番号の重複と同じ意味になる（大文字小文字を区別しない）。
+  uq_organizations_login_code_lower: 'この管理番号は既に使用されています（大文字小文字は区別されません）。別の管理番号を指定してください。',
   organizations_management_number_key: 'この管理番号は既に登録されています。',
   office_service_registrations_office_id_service_type_id_key: '同じ事業所に同じサービス種別が重複して登録されています。',
 }

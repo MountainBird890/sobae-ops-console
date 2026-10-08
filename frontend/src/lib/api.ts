@@ -36,17 +36,26 @@ async function request<T>(path: string, init: { method?: string; body?: unknown 
     throw new ApiError('VITE_API_BASE_URL is not configured', 0)
   }
 
-  const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } }
-  const accessToken = data.session?.access_token
+  const send = async (accessToken: string | undefined) =>
+    await fetch(`${API_BASE_URL}${path}`, {
+      method: init.method ?? 'GET',
+      headers: {
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+    })
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method: init.method ?? 'GET',
-    headers: {
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-  })
+  const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } }
+  let res = await send(data.session?.access_token)
+
+  // The access token can expire between getSession() and the server's check (a tab that sat idle, a slow
+  // connection). On a 401, refresh the session once and send the same request again; a request that is
+  // really unauthorised still ends as a 401.
+  if (res.status === 401 && supabase) {
+    const { data: refreshed } = await supabase.auth.refreshSession()
+    if (refreshed.session) res = await send(refreshed.session.access_token)
+  }
   const body = (await res.json().catch(() => undefined)) as ErrorResponseBody | undefined
 
   if (!res.ok) {
@@ -66,19 +75,51 @@ async function request<T>(path: string, init: { method?: string; body?: unknown 
 
 export type OrganizationStatus = 'active' | 'suspended' | 'terminated'
 
+// Organizations that existed before migration 250 have no management number / contract start
+// date, and a NULL status when they are not active ("needs review"). Show them as "—".
 export interface Organization {
   id: string
   name: string
-  management_number: string
-  status: OrganizationStatus
-  contract_start_date: string
+  management_number: string | null
+  status: OrganizationStatus | null
+  contract_start_date: string | null
   contract_end_date: string | null
+  // Latest organization-level suspend / reactivate (JST date 'YYYY-MM-DD'); null if never.
+  last_suspended_at: string | null
+  last_reactivated_at: string | null
+}
+
+// An office as shown on the screens. `status` is the office's own (effective) status; `display_status` is
+// what to show: the organization's state wins unless it is active (an office under a suspended or
+// terminated organization cannot log in whatever its own status says).
+export interface Office {
+  id: string
+  organization_id: string
+  organization_name: string | null
+  code: string
+  name: string
+  postal_code: string | null
+  address: string | null
+  phone: string | null
+  fax: string | null
+  email: string | null
+  is_active: boolean
+  status: OrganizationStatus | null
+  organization_status: OrganizationStatus | null
+  display_status: OrganizationStatus | null
+  contract_start_date: string | null
+  contract_end_date: string | null
+  created_at: string
+  last_suspended_at: string | null
+  last_reactivated_at: string | null
 }
 
 export interface OrganizationSummary {
   active: number
   suspended: number
   terminated: number
+  // Organizations whose status could not be determined (legacy + not active).
+  unconfirmed: number
   total: number
 }
 
@@ -96,6 +137,33 @@ export function fetchOrganizationSummary() {
 
 export function fetchOrganization(id: string) {
   return request<{ organization: Organization }>(`/api/organizations/${encodeURIComponent(id)}`)
+}
+
+export function fetchOrganizationOffices(organizationId: string) {
+  return request<{ offices: Office[] }>(`/api/organizations/${encodeURIComponent(organizationId)}/offices`)
+}
+
+export function fetchOffice(id: string) {
+  return request<{ office: Office }>(`/api/offices/${encodeURIComponent(id)}`)
+}
+
+// Lifecycle operations. `confirmName` is the target's name typed again by the operator (SEC-004); the
+// backend re-checks it. `reason` is optional and only kept in the audit log.
+export type OrganizationLifecycleAction = 'suspend' | 'reactivate' | 'terminate'
+export type OfficeLifecycleAction = 'suspend' | 'reactivate'
+
+export function runOrganizationAction(id: string, action: OrganizationLifecycleAction, body: { confirmName: string; reason?: string }) {
+  return request<{ result: { organization_id: string; status: string; log_id: string } }>(
+    `/api/organizations/${encodeURIComponent(id)}/${action}`,
+    { method: 'POST', body: { confirm_name: body.confirmName, reason: body.reason || undefined } },
+  )
+}
+
+export function runOfficeAction(id: string, action: OfficeLifecycleAction, body: { confirmName: string; reason?: string }) {
+  return request<{ result: { office_id: string; status: string; log_id: string } }>(
+    `/api/offices/${encodeURIComponent(id)}/${action}`,
+    { method: 'POST', body: { confirm_name: body.confirmName, reason: body.reason || undefined } },
+  )
 }
 
 // Mirrors backend/src/routes/onboarding.ts's Zod schema — kept in sync by
@@ -116,23 +184,23 @@ export interface ServiceRegistrationInput {
 export interface OfficeInput {
   code: string
   name: string
-  postal_code?: string
-  address?: string
-  phone?: string
+  postal_code: string
+  address: string
+  phone: string
   fax?: string
-  email?: string
+  email: string
   display_name?: string
   service_registrations: ServiceRegistrationInput[]
 }
 
+// login_code is not an input: the backend derives it from management_number.
 export interface OrganizationInput {
   name: string
-  login_code?: string
-  postal_code?: string
-  address?: string
-  phone?: string
+  postal_code: string
+  address: string
+  phone: string
   fax?: string
-  email?: string
+  email: string
   management_number: string
   contract_start_date: string
 }
@@ -148,8 +216,8 @@ export interface InitialAdminInput {
   office_code: string
   last_name: string
   first_name: string
-  last_name_kana?: string
-  first_name_kana?: string
+  last_name_kana: string
+  first_name_kana: string
   employment_type?: OnboardingEmploymentTypeCode
   phone?: string
   email?: string

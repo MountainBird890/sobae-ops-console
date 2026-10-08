@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react'
 import { ApiError, fetchOrganizationSummary, type OrganizationSummary } from '../lib/api'
 
 const CARDS: { key: keyof OrganizationSummary; label: string; colorClassName: string }[] = [
-  { key: 'total', label: '契約事業所数', colorClassName: 'text-blue-600' },
+  { key: 'total', label: '契約法人数', colorClassName: 'text-blue-600' },
   { key: 'active', label: '有効', colorClassName: 'text-green-600' },
   { key: 'suspended', label: '利用停止中', colorClassName: 'text-amber-600' },
   { key: 'terminated', label: '契約終了', colorClassName: 'text-slate-500' },
+  { key: 'unconfirmed', label: '要確認', colorClassName: 'text-red-600' },
 ]
+
+// 「要確認」は該当がある場合だけ表示する（本体migration 250より前の法人で、無効なもの）。
+const HIDE_WHEN_ZERO: (keyof OrganizationSummary)[] = ['unconfirmed']
 
 export function Dashboard() {
   const [summary, setSummary] = useState<OrganizationSummary | null>(null)
@@ -48,7 +52,7 @@ export function Dashboard() {
 
       {summary && (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4">
-          {CARDS.map(({ key, label, colorClassName }) => (
+          {CARDS.filter(({ key }) => !(HIDE_WHEN_ZERO.includes(key) && summary[key] === 0)).map(({ key, label, colorClassName }) => (
             <div key={key} className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="text-sm text-slate-500">{label}</div>
               <div className={`text-3xl font-bold ${colorClassName}`}>{summary[key]}</div>

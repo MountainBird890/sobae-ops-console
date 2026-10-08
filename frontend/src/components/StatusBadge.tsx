@@ -12,10 +12,12 @@ const COLOR_CLASSES: Record<OrganizationStatus, string> = {
   terminated: 'bg-slate-100 text-slate-600',
 }
 
-export function StatusBadge({ status }: { status: OrganizationStatus }) {
-  return (
-    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${COLOR_CLASSES[status]}`}>
-      {LABELS[status]}
-    </span>
-  )
+// status が null の法人（本体migration 250より前から存在し、かつ無効なもの）は「要確認」と表示する。
+const UNCONFIRMED_LABEL = '要確認'
+const UNCONFIRMED_CLASS = 'bg-white text-red-700 ring-1 ring-red-300'
+
+export function StatusBadge({ status }: { status: OrganizationStatus | null }) {
+  const label = status === null ? UNCONFIRMED_LABEL : LABELS[status]
+  const color = status === null ? UNCONFIRMED_CLASS : COLOR_CLASSES[status]
+  return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${color}`}>{label}</span>
 }
