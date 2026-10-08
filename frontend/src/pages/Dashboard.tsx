@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ApiError, fetchOrganizationSummary, type OrganizationSummary } from '../lib/api'
 
 const CARDS: { key: keyof OrganizationSummary; label: string; colorClassName: string }[] = [
-  { key: 'total', label: '契約事業所数', colorClassName: 'text-blue-600' },
+  { key: 'total', label: '契約法人数', colorClassName: 'text-blue-600' },
   { key: 'active', label: '有効', colorClassName: 'text-green-600' },
   { key: 'suspended', label: '利用停止中', colorClassName: 'text-amber-600' },
   { key: 'terminated', label: '契約終了', colorClassName: 'text-slate-500' },

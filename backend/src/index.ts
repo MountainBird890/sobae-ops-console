@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import organizations from './routes/organizations.js'
+import offices from './routes/offices.js'
 import onboarding from './routes/onboarding.js'
 import staff from './routes/staff.js'
 import { requireAuth, type AuthVariables } from './auth/middleware.js'
@@ -30,6 +31,7 @@ app.get('/health', (c) => {
 })
 
 app.route('/api/organizations', organizations)
+app.route('/api/offices', offices)
 app.route('/api/onboarding', onboarding)
 app.route('/api/staff', staff)
 

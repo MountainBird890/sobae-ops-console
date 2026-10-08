@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import { Dashboard } from './pages/Dashboard'
 import { OrganizationList } from './pages/OrganizationList'
 import { OrganizationDetail } from './pages/OrganizationDetail'
+import { OfficeDetail } from './pages/OfficeDetail'
 import { Onboarding } from './pages/Onboarding'
 import { Login } from './pages/Login'
 import { AcceptInvite } from './pages/AcceptInvite'
@@ -39,7 +40,7 @@ function Header() {
             ダッシュボード
           </NavLink>
           <NavLink to="/organizations" className={navLinkClassName}>
-            事業所一覧
+            法人一覧
           </NavLink>
           <NavLink to="/onboarding" className={navLinkClassName}>
             新規契約登録
@@ -68,6 +69,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/organizations" element={<OrganizationList />} />
             <Route path="/organizations/:id" element={<OrganizationDetail />} />
+            <Route path="/offices/:id" element={<OfficeDetail />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/staff/invite" element={<InviteStaff />} />
           </Route>

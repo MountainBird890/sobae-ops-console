@@ -36,15 +36,16 @@ const serviceRegistrationSchema = z.object({
 })
 
 const officeSchema = z.object({
-  code: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'),
-  name: z.string().trim().min(1, '必須項目です').max(200, '200文字以内で入力してください'),
+  // 長さの上限は本体の列に合わせる: offices.code varchar(20)、offices.name varchar(100)、phone/fax varchar(20)。
+  code: z.string().trim().min(1, '必須項目です').max(20, '20文字以内で入力してください'),
+  name: z.string().trim().min(1, '必須項目です').max(100, '100文字以内で入力してください'),
   // 法人・事業所の項目はFAXを除き全部必須（2026-09-18打合せ決定、REQ-0001 SEC-003）。display_name は画面から
   // 非表示にするが、DBの列は残すため任意のまま受け付ける。
   postal_code: z.string().trim().regex(POSTAL_CODE_RE, '7桁の数字で入力してください'),
   address: z.string().trim().min(1, '必須項目です').max(300, '300文字以内で入力してください'),
-  phone: z.string().trim().min(1, '必須項目です').max(30, '30文字以内で入力してください'),
+  phone: z.string().trim().min(1, '必須項目です').max(20, '20文字以内で入力してください'),
   // FAXは持たない事業所があるため任意（2026-10-08、shimo判断）。
-  fax: z.string().trim().min(1, '1文字以上で入力してください').max(30, '30文字以内で入力してください').optional(),
+  fax: z.string().trim().min(1, '1文字以上で入力してください').max(20, '20文字以内で入力してください').optional(),
   email: z.email('メールアドレスの形式で入力してください'),
   display_name: z.string().trim().min(1, '1文字以上で入力してください').max(200, '200文字以内で入力してください').optional(),
   service_registrations: z.array(serviceRegistrationSchema).default([]),
@@ -69,17 +70,17 @@ const organizationSchema = z.object({
 })
 
 const initialAdminSchema = z.object({
-  office_code: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'),
-  last_name: z.string().trim().min(1, '必須項目です').max(100, '100文字以内で入力してください'),
-  first_name: z.string().trim().min(1, '必須項目です').max(100, '100文字以内で入力してください'),
+  office_code: z.string().trim().min(1, '必須項目です').max(20, '20文字以内で入力してください'),
+  last_name: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'), // staff.last_name varchar(50)
+  first_name: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'), // staff.first_name varchar(50)
   // 姓名（カナ）は必須（本体のログインID自動生成に使う、2026-09-18打合せ決定）。
-  last_name_kana: z.string().trim().min(1, '必須項目です').max(100, '100文字以内で入力してください'),
-  first_name_kana: z.string().trim().min(1, '必須項目です').max(100, '100文字以内で入力してください'),
+  last_name_kana: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'), // staff.last_name_kana varchar(50)
+  first_name_kana: z.string().trim().min(1, '必須項目です').max(50, '50文字以内で入力してください'), // staff.first_name_kana varchar(50)
   // 許可コードはDBのCHECK制約由来（staff_employment_type_check）。フロント側の
   // 入力欄はまだ自由入力のままなので、不正値は「雇用形態の値が不正です」としか
   // 出せない。選択式UIへの変更は別課題（技術実績台帳15章参照、本対応では未着手）。
   employment_type: z.enum(EMPLOYMENT_TYPE_CODES, { message: '雇用形態の値が不正です' }).optional(),
-  phone: z.string().trim().min(1, '1文字以上で入力してください').max(30, '30文字以内で入力してください').optional(),
+  phone: z.string().trim().min(1, '1文字以上で入力してください').max(20, '20文字以内で入力してください').optional(),
   email: z.email('メールアドレスの形式で入力してください').optional(),
   postal_code: z.string().trim().regex(POSTAL_CODE_RE, '7桁の数字で入力してください').optional(),
   address: z.string().trim().min(1, '1文字以上で入力してください').max(300, '300文字以内で入力してください').optional(),
