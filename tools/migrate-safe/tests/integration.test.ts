@@ -35,6 +35,11 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
   let dir = ''
   let lines: string[] = []
   let publicFingerprintBefore: string | null = null
+  // Roles are cluster-global. `init` requires both Console roles to exist (01_roles.sql creates them
+  // in real environments); a freshly reset local dev DB may lack them. Create the missing ones for
+  // the run and drop only those afterwards.
+  const REQUIRED_ROLES = ['sobae_onboarding_executor', 'sobae_ops_executor']
+  const createdRoles: string[] = []
 
   const run = (environment = 'local', url = testUrl, extra: Partial<RunOptions> = {}): RunOptions => ({
     environment,
@@ -68,6 +73,13 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
     assert.ok(ADMIN_URL)
     assert.ok(isLoopbackHost(new URL(ADMIN_URL).hostname), 'CONSOLE_TEST_LOCAL_DB_URL must point at a loopback host')
     admin = postgres(ADMIN_URL, { max: 1, onnotice: () => {} })
+    for (const role of REQUIRED_ROLES) {
+      const [{ n }] = await admin<{ n: number }[]>`select count(*)::int as n from pg_roles where rolname = ${role}`
+      if (n === 0) {
+        await admin.unsafe(`create role ${role} nologin`)
+        createdRoles.push(role)
+      }
+    }
     await admin.unsafe(`create database ${dbName} template postgres`)
     testUrl = withDatabase(ADMIN_URL, dbName)
     sql = postgres(testUrl, { max: 1, onnotice: () => {} })
@@ -94,6 +106,9 @@ describe('migrate-safe against a throwaway local database', { skip: !ADMIN_URL }
       try { await admin?.unsafe(`drop database if exists ${dbName}`) } catch { /* ignore */ }
     }
     try { await admin?.unsafe(`drop role if exists ${otherRole}`) } catch { /* ignore */ }
+    for (const role of createdRoles) {
+      try { await admin?.unsafe(`drop role if exists ${role}`) } catch { /* ignore (e.g. CONSOLE_TEST_KEEP_DB=1 keeps objects that depend on it) */ }
+    }
     try { await admin?.end({ timeout: 5 }) } catch { /* ignore */ }
     if (dir) rmSync(dir, { recursive: true, force: true })
   })
