@@ -16,6 +16,8 @@ export interface RunOptions {
   environmentsFile: string
   // Repository root, used by the git guard.
   repoRoot: string
+  // CONSOLE_ALLOW_PRODUCTION=1: the explicit permission needed to run against the production profile.
+  allowProduction?: boolean
   // CONSOLE_MIGRATE_AUTOTEST=1: skips the git guard and the typed confirmation, and ONLY when
   // the target is a loopback host. Ignored for any remote target.
   autotest: boolean
@@ -59,7 +61,7 @@ function openConnection(opts: RunOptions): postgres.Sql {
 
 async function withConnection<T>(opts: RunOptions, fn: (sql: postgres.Sql, conn: ConnectionInfo, config: EnvironmentsConfig) => Promise<T>): Promise<T> {
   // Environment name is validated before anything is opened (production is refused here).
-  assertEnvironmentName(opts.environment)
+  assertEnvironmentName(opts.environment, { allowProduction: opts.allowProduction ?? false })
   const config = loadEnvironments(opts.environmentsFile)
   const conn = parseConnection(opts.url)
   const sql = openConnection(opts)
@@ -120,7 +122,7 @@ function drift(ins: Inspection): { state: 'none' | 'drift' | 'n/a'; text: string
 }
 
 function printHeader(opts: RunOptions, ins: Inspection): void {
-  opts.out(`環境: ${opts.environment}`)
+  opts.out(opts.environment === 'production' ? '環境: production（本番）' : `環境: ${opts.environment}`)
   opts.out(`${ins.gate.ok ? OK : NG} 接続先の照合: ${ins.gate.detail}`)
   opts.out(`${ins.role === 'postgres' ? OK : NG} 接続ロール: ${ins.role}${ins.role === 'postgres' ? '' : '（postgres であることが必要です）'}`)
   opts.out(`${ins.setRole.ok ? OK : NG} 所有者ロールへの SET 権限: ${describeSetRole(ins.setRole, ins.role)}`)
@@ -210,22 +212,27 @@ export async function cmdVerify(opts: RunOptions): Promise<number> {
 }
 
 // ---------------------------------------------------------------- shared write guards
+// The test-only escape hatches never apply to production, even for a loopback target (e.g. a tunnel).
+function bypassAllowed(opts: RunOptions, flag: boolean | undefined, conn: Pick<ConnectionInfo, 'loopback'>): boolean {
+  return opts.environment !== 'production' && autotestApplies(flag, conn)
+}
+
 function writeGuard(opts: RunOptions, conn: ConnectionInfo): { ok: boolean; commit: string | null } {
-  if (autotestApplies(opts.autotest || opts.skipGitGuardForTests, conn)) {
+  if (bypassAllowed(opts, opts.autotest || opts.skipGitGuardForTests, conn)) {
     opts.out('（autotest: ループバックのため git ガードを省略します）')
     return { ok: true, commit: null }
   }
-  if (opts.autotest && !autotestApplies(opts.autotest, conn)) {
+  if (opts.autotest && !bypassAllowed(opts, opts.autotest, conn)) {
     opts.out('（CONSOLE_MIGRATE_AUTOTEST は、ループバック以外では無視します）')
   }
-  const info = collectGitInfo(opts.repoRoot, join('sql', 'migrations'))
+  const info = collectGitInfo(opts.repoRoot, join('sql', 'migrations'), undefined, opts.environment === 'production' ? 'main' : 'staging')
   const g = evaluateGitGuard(info)
   opts.out(`${g.ok ? OK : NG} git ガード: ${g.reason}`)
   return { ok: g.ok, commit: g.ok ? info.head : null }
 }
 
 async function confirmed(opts: RunOptions, conn: ConnectionInfo): Promise<boolean> {
-  if (autotestApplies(opts.autotest, conn)) return true
+  if (bypassAllowed(opts, opts.autotest, conn)) return true
   const code = generateCode()
   const ok = await opts.confirm(code)
   if (!ok) opts.out(`${NG} 確認コードが一致しません。中止します`)
