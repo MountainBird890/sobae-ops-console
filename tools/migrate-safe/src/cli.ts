@@ -18,7 +18,8 @@ async function main(): Promise<number> {
   const out = (line: string) => console.log(maskSecrets(line, secrets))
   try {
     const { command, environment } = parseArgs(process.argv.slice(2))
-    assertEnvironmentName(environment) // production / unknown names are refused before anything else
+    const allowProduction = process.env.CONSOLE_ALLOW_PRODUCTION === '1'
+    assertEnvironmentName(environment, { allowProduction }) // unknown names, and production without the permission flag, are refused before anything else
 
     const url = process.env.CONSOLE_ADMIN_DATABASE_URL
     if (!url) throw new Error('環境変数 CONSOLE_ADMIN_DATABASE_URL が設定されていません')
@@ -30,6 +31,7 @@ async function main(): Promise<number> {
       migrationsDir: join(REPO_ROOT, 'sql', 'migrations'),
       environmentsFile: join(TOOL_DIR, 'environments.json'),
       repoRoot: REPO_ROOT,
+      allowProduction,
       autotest: process.env.CONSOLE_MIGRATE_AUTOTEST === '1',
       confirm: askForCode,
       out,

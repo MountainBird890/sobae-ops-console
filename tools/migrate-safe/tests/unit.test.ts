@@ -19,17 +19,21 @@ const MIGRATIONS_DIR = join(HERE, '..', '..', '..', 'sql', 'migrations')
 const REF = 'abcdefghijklmnopqrst' // 20 chars, a stand-in for a project ref
 const STAGING_ID = '11111111-1111-1111-1111-111111111111'
 const PROD_ID = '99999999-9999-9999-9999-999999999999'
+const PROD_REF = 'pppppppppppppppppppp' // 20 chars, a stand-in for the production project ref
 const TEST_REF = 'tttttttttttttttttttt' // 20 chars, a stand-in for the test-onboarding project ref
 const CONFIG: EnvironmentsConfig = {
   environments: {
     staging: { database_id: STAGING_ID, project_ref: REF },
     'test-onboarding': { project_ref: TEST_REF, require_no_database_id: true },
     local: { loopback_only: true },
+    production: { database_id: PROD_ID, project_ref: PROD_REF, production: true },
   },
-  refuse_database_ids: [PROD_ID],
+  refuse_database_ids: [],
+  protected_database_ids: [PROD_ID],
 }
 const poolerConn = parseConnection(`postgresql://postgres.${REF}:secretpw@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`)
 const localConn = parseConnection('postgresql://postgres:secretpw@127.0.0.1:5433/postgres')
+const prodConn = parseConnection(`postgresql://postgres.${PROD_REF}:secretpw@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`)
 const testConn = parseConnection(`postgresql://postgres.${TEST_REF}:secretpw@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres`)
 
 describe('maskSecrets', () => {
@@ -152,8 +156,11 @@ describe('environment gate', () => {
   const gate = (environment: string, databaseId: string | null, connection = poolerConn) =>
     evaluateGate({ environment, config: CONFIG, databaseId, connection })
 
-  it('refuses production and unknown environment names before connecting', () => {
-    assert.throws(() => assertEnvironmentName('production'), /production/)
+  it('refuses production without the permission flag, and unknown names, before connecting', () => {
+    assert.throws(() => assertEnvironmentName('production'), /CONSOLE_ALLOW_PRODUCTION/)
+    assert.throws(() => assertEnvironmentName('production', { allowProduction: false }), /CONSOLE_ALLOW_PRODUCTION/)
+    assert.doesNotThrow(() => assertEnvironmentName('production', { allowProduction: true }))
+    assert.throws(() => assertEnvironmentName('some-other-env', { allowProduction: true }), /未知/)
     assert.throws(() => assertEnvironmentName('some-other-env'), /未知/)
     assert.throws(() => assertEnvironmentName(''), /未知/)
     assert.doesNotThrow(() => assertEnvironmentName('staging'))
@@ -170,9 +177,33 @@ describe('environment gate', () => {
     assert.equal(gate('staging', STAGING_ID, otherRef).status, 'project_ref_mismatch')
     assert.equal(gate('staging', STAGING_ID, localConn).status, 'project_ref_mismatch')
   })
-  it('refuses the production database_id whatever environment is requested', () => {
+  it('refuses the production database_id under every non-production environment name', () => {
     assert.equal(gate('staging', PROD_ID).status, 'refused_database_id')
     assert.equal(gate('local', PROD_ID, localConn).status, 'refused_database_id')
+    assert.equal(gate('test-onboarding', PROD_ID, testConn).status, 'refused_database_id')
+  })
+  it('production: accepted only on database_id AND project_ref both matching', () => {
+    assert.equal(gate('production', PROD_ID, prodConn).ok, true)
+    assert.equal(gate('production', 'other-id', prodConn).status, 'mismatch')
+    assert.equal(gate('production', STAGING_ID, prodConn).status, 'mismatch')
+    assert.equal(gate('production', null, prodConn).status, 'no_database_state')
+    assert.equal(gate('production', PROD_ID, poolerConn).status, 'project_ref_mismatch') // staging parent URL
+    assert.equal(gate('production', PROD_ID, localConn).status, 'project_ref_mismatch') // no ref readable
+  })
+  it('production: fails closed on an incomplete or inconsistent profile', () => {
+    const run = (profile: object, protectedIds = [PROD_ID]) =>
+      evaluateGate({ environment: 'production', config: { environments: { production: profile }, refuse_database_ids: [], protected_database_ids: protectedIds }, databaseId: PROD_ID, connection: prodConn }).status
+    assert.equal(run({ production: true, database_id: PROD_ID }), 'config_error') // no project_ref
+    assert.equal(run({ production: true, project_ref: PROD_REF }), 'config_error') // no database_id
+    assert.equal(run({ production: true, database_id: PROD_ID, project_ref: PROD_REF }, []), 'config_error') // not protected
+    assert.equal(run({ database_id: PROD_ID, project_ref: PROD_REF }), 'config_error') // production flag missing
+    assert.equal(run({ production: true, database_id: PROD_ID, project_ref: PROD_REF, loopback_only: true }), 'config_error')
+  })
+  it('the production flag and the production database_id cannot be used under another name', () => {
+    const flagged: EnvironmentsConfig = { environments: { staging: { database_id: STAGING_ID, production: true } }, refuse_database_ids: [], protected_database_ids: [PROD_ID] }
+    assert.equal(evaluateGate({ environment: 'staging', config: flagged, databaseId: STAGING_ID, connection: poolerConn }).status, 'config_error')
+    const prodIdInStaging: EnvironmentsConfig = { environments: { staging: { database_id: PROD_ID } }, refuse_database_ids: [], protected_database_ids: [PROD_ID] }
+    assert.equal(evaluateGate({ environment: 'staging', config: prodIdInStaging, databaseId: STAGING_ID, connection: poolerConn }).status, 'config_error')
   })
   it('local: loopback only, no database_id needed', () => {
     assert.equal(gate('local', null, localConn).ok, true)
@@ -199,9 +230,9 @@ describe('environment gate', () => {
     assert.equal(gate('staging', null, testConn).status, 'no_database_state')
   })
   it('test-onboarding: configuration errors are reported (no project_ref, or both database_id and require_no_database_id)', () => {
-    const noRef: EnvironmentsConfig = { environments: { 'test-onboarding': { require_no_database_id: true } }, refuse_database_ids: [] }
+    const noRef: EnvironmentsConfig = { environments: { 'test-onboarding': { require_no_database_id: true } }, refuse_database_ids: [], protected_database_ids: [] }
     assert.equal(evaluateGate({ environment: 'test-onboarding', config: noRef, databaseId: null, connection: testConn }).status, 'config_error')
-    const both: EnvironmentsConfig = { environments: { 'test-onboarding': { project_ref: TEST_REF, database_id: 'x', require_no_database_id: true } }, refuse_database_ids: [] }
+    const both: EnvironmentsConfig = { environments: { 'test-onboarding': { project_ref: TEST_REF, database_id: 'x', require_no_database_id: true } }, refuse_database_ids: [], protected_database_ids: [] }
     assert.equal(evaluateGate({ environment: 'test-onboarding', config: both, databaseId: null, connection: testConn }).status, 'config_error')
   })
   it('messages never contain database_id or project_ref values', () => {
@@ -214,14 +245,36 @@ describe('environment gate', () => {
     }
   })
   it('reports configuration errors (unknown profile, staging id equal to a refused id)', () => {
-    assert.equal(evaluateGate({ environment: 'staging', config: { environments: {}, refuse_database_ids: [] }, databaseId: 'x', connection: poolerConn }).status, 'config_error')
-    const bad: EnvironmentsConfig = { environments: { staging: { database_id: PROD_ID } }, refuse_database_ids: [PROD_ID] }
+    assert.equal(evaluateGate({ environment: 'staging', config: { environments: {}, refuse_database_ids: [], protected_database_ids: [] }, databaseId: 'x', connection: poolerConn }).status, 'config_error')
+    const bad: EnvironmentsConfig = { environments: { staging: { database_id: PROD_ID } }, refuse_database_ids: [PROD_ID], protected_database_ids: [] }
     assert.equal(evaluateGate({ environment: 'staging', config: bad, databaseId: PROD_ID, connection: poolerConn }).status, 'config_error')
   })
 })
 
 describe('git guard', () => {
-  const base: GitInfo = { branch: 'staging', head: 'abc', originStaging: 'abc', migrationsDirty: false }
+  const base: GitInfo = { branch: 'staging', head: 'abc', baseBranch: 'staging', originBase: 'abc', migrationsDirty: false }
+  const prod: GitInfo = { branch: 'main', head: 'abc', baseBranch: 'main', originBase: 'abc', migrationsDirty: false }
+  it('production: allows only a clean main identical to origin/main', () => {
+    assert.equal(evaluateGitGuard(prod).ok, true)
+    assert.equal(evaluateGitGuard({ ...prod, branch: 'staging' }).ok, false)
+    assert.equal(evaluateGitGuard({ ...prod, branch: 'feature/x' }).ok, false)
+    assert.equal(evaluateGitGuard({ ...prod, branch: 'HEAD' }).ok, false)
+    assert.equal(evaluateGitGuard({ ...prod, head: 'def' }).ok, false)
+    assert.equal(evaluateGitGuard({ ...prod, migrationsDirty: true }).ok, false)
+  })
+  it('production: collects info from origin/main', () => {
+    const calls: string[] = []
+    const info = collectGitInfo('/repo', 'sql/migrations', (cmd, args) => {
+      calls.push(`${cmd} ${args.join(' ')}`)
+      if (args[0] === 'status') return ''
+      if (args.includes('--abbrev-ref')) return 'main'
+      return 'sha'
+    }, 'main')
+    assert.equal(info.baseBranch, 'main')
+    assert.equal(calls[0], 'git fetch --quiet origin main')
+    assert.ok(calls.some((c) => c.includes('origin/main')))
+    assert.equal(evaluateGitGuard(info).ok, true)
+  })
   it('allows only a clean staging branch identical to origin/staging', () => {
     assert.equal(evaluateGitGuard(base).ok, true)
     assert.equal(evaluateGitGuard({ ...base, branch: 'feature/x' }).ok, false)

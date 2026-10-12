@@ -15,7 +15,7 @@ Sobae_Works 本体の migrate-safe（`db/migrate-safe.mjs`）を手本にして�
 
 | 項目 | 内容 |
 |---|---|
-| 本番 | `--environment=production` は、DB に接続する前に拒否する。接続先の `database_id` が拒否リスト（本番）と一致した場合も、環境の指定に関わらず拒否する |
+| 本番 | `--environment=production` は、環境変数 `CONSOLE_ALLOW_PRODUCTION=1` が無ければ、DB に接続する前に拒否する。許可しても、`environments.json` の `production` プロファイルで **`database_id` と `project_ref` の両方**が一致した接続だけを受け付ける（どちらかが未設定なら拒否＝fail closed）。git ガードは `main` が `origin/main` と一致し、migrations がクリーンなときだけ。`CONSOLE_MIGRATE_AUTOTEST` は、本番では無効。本番の `database_id`（`protected_database_ids`）は、`production` 以外の名前では、常に拒否する |
 | 環境の識別 | `environments.json` の `database_id` と、接続先の `sobae_meta.database_state.database_id` の完全一致。ホスト名では判定しない。`project_ref`（接続文字列から取り出す）は、**拒否を増やすだけ**の追加確認（取り出せないときは拒否）。例外は `test-onboarding`（次の行） |
 | test-onboarding | その DB には `database_id` が登録されていない（`sobae_meta.database_state` が空）ため、`project_ref` で識別する。**`database_id` が登録されている DB（staging 親、本番）は、ref が一致しても、この名前では受け付けない**（`require_no_database_id`）。将来 `database_id` が登録されたら、拒否になる（プロファイルの更新が必要） |
 | 所有者ロールへの SET 権限 | `postgres` が `sobae_onboarding_executor` へ `SET ROLE` できること（PostgreSQL 16 以降の role membership の SET オプション。`pg_has_role(current_user, …, 'SET')`）。`alter … owner to` に必要。無いと `init` / `migrate` は、git ガード・確認コードの前に拒否し、`plan` は「migrate 可能: いいえ」、`status` は `[NG]` を表示する（2026-10-07 の staging 親で `04` が失敗した原因）。付与は DB への書き込みなので、承認を得て runner の外で実行する（`grant sobae_onboarding_executor to postgres with inherit true, set true;`）。role membership は Console / 本体どちらの fingerprint にも入らない |
@@ -73,7 +73,7 @@ DB 不要のテストの内訳: ゲート・禁止 SQL・ファイル検査な�
 ## 本体の migrate-safe との違い（省略した機能）
 
 bootstrap-legacy / initialize-baseline、fingerprint v3、master data の fingerprint、cutover 系、restore-preflight、sync-shift、
-acl-audit / acl-remediation、production 向けの機能、履歴の記録の細かい種別。必要になったら、段階的に足す。
+acl-audit / acl-remediation、履歴の記録の細かい種別。必要になったら、段階的に足す。
 
 ## 注意
 

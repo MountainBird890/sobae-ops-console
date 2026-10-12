@@ -7,7 +7,7 @@ export function usage(): string {
   return [
     '使い方: tsx src/cli.ts <command> --environment=<name>',
     `  command: ${COMMANDS.join(' | ')}`,
-    `  --environment=<name> は必須です（${KNOWN_ENVIRONMENTS.join(' | ')}。production は使えません）`,
+    `  --environment=<name> は必須です（${KNOWN_ENVIRONMENTS.join(' | ')}。production は、環境変数 CONSOLE_ALLOW_PRODUCTION=1 の明示が必要です）`,
     '  接続文字列は、環境変数 CONSOLE_ADMIN_DATABASE_URL から読みます',
   ].join('\n')
 }
