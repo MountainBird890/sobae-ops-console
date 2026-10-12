@@ -1,5 +1,5 @@
 {
-  "description": "Environment identification for the Console migrate-safe runner. Identification relies on the database_id stored inside the database (sobae_meta.database_state), not on host names. project_ref is an extra check that can only add refusals. refuse_database_ids lists databases this tool must never touch (production). No connection strings or passwords belong here. The test-onboarding profile has no database_id (the branch's sobae_meta.database_state is empty): it is identified by project_ref and only accepts a database that has no registered database_id.",
+  "description": "Environment identification for the Console migrate-safe runner. Identification relies on the database_id stored inside the database (sobae_meta.database_state), not on host names. project_ref is an extra check that can only add refusals. refuse_database_ids lists databases this tool must never touch under any name. protected_database_ids lists production databases: accepted ONLY under the profile with production:true (needs both database_id and project_ref, plus CONSOLE_ALLOW_PRODUCTION=1 and the main branch); refused under every other name. No connection strings or passwords belong here. The test-onboarding profile has no database_id (the branch's sobae_meta.database_state is empty): it is identified by project_ref and only accepts a database that has no registered database_id.",
   "environments": {
     "staging": {
       "database_id": "2733ae17-335b-4bf0-ac42-34cf5be92c5d",
@@ -11,9 +11,15 @@
     },
     "local": {
       "loopback_only": true
+    },
+    "production": {
+      "database_id": "b898ff74-5941-5a52-b6a9-814d886dd852",
+      "production": true,
+      "project_ref": "vhjhdbtqpyazzqgzojix"
     }
   },
-  "refuse_database_ids": [
+  "refuse_database_ids": [],
+  "protected_database_ids": [
     "b898ff74-5941-5a52-b6a9-814d886dd852"
   ]
 }

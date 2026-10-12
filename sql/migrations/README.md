@@ -63,7 +63,7 @@ runnerは、チェックサム、番号の欠番・重複、禁止SQL（`BEGIN`/
 ## 8. 特に厳守すること
 
 - Supabaseダッシュボードやpsqlからスキーマ変更を直接実行しない。スキーマ変更は必ずこのディレクトリのマイグレーションファイルを経由し、**適用は`tools/migrate-safe/`のrunnerで行う**（psqlで`-f`適用すると、履歴・fingerprintから外れる）
-- staging親・test-onboarding・本番に対するrunnerの実行は、ユーザーの承認を得てから行う。本番（`sobae-works-production-tokyo`）は、runnerが拒否する
+- staging親・test-onboarding・本番に対するrunnerの実行は、ユーザーの承認を得てから行う。本番（`sobae-works-production-tokyo`）は、`--environment=production`＋`CONSOLE_ALLOW_PRODUCTION=1`＋`main`ブランチ（`origin/main`と一致）のときだけ、runnerが受け付ける。代表の許可を得たうえで、ユーザーが自分の端末で実行する
 - 1つのマイグレーションファイルに、無関係な複数の変更を混ぜない
 - 迷ったら新しいファイルを追加する。既存ファイルを書き直すより積み増しを優先する
 

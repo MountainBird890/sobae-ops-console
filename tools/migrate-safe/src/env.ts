@@ -10,27 +10,36 @@ export interface EnvironmentProfile {
   // only accepts a database that has NO database_id, so a database that does have one (staging
   // parent, production) can never be accepted under this name.
   require_no_database_id?: boolean
+  // The one profile that may target a protected (production) database. Requires both database_id
+  // (listed in protected_database_ids) and project_ref; the gate fails closed if either is missing.
+  production?: boolean
 }
 
 export interface EnvironmentsConfig {
   environments: Record<string, EnvironmentProfile>
+  // Refused under every environment name.
   refuse_database_ids: string[]
+  // Production database_ids: accepted ONLY under a profile with `production: true`; refused under every other
+  // environment name (a staging / test-onboarding / local run can never reach production by mistake).
+  protected_database_ids: string[]
 }
 
-export const KNOWN_ENVIRONMENTS = ['staging', 'test-onboarding', 'local'] as const
+export const KNOWN_ENVIRONMENTS = ['staging', 'test-onboarding', 'local', 'production'] as const
 
 export function loadEnvironments(file: string): EnvironmentsConfig {
   const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<EnvironmentsConfig>
   return {
     environments: raw.environments ?? {},
     refuse_database_ids: raw.refuse_database_ids ?? [],
+    protected_database_ids: raw.protected_database_ids ?? [],
   }
 }
 
-// Runs BEFORE any connection is opened. production is never a valid target of this tool.
-export function assertEnvironmentName(environment: string): void {
-  if (environment === 'production') {
-    throw new Error('--environment=production はこのツールでは使えません（本番は、代表の承認なしに接続しません）')
+// Runs BEFORE any connection is opened. production additionally needs the explicit permission
+// CONSOLE_ALLOW_PRODUCTION=1, so a run aimed at production can never happen by accident.
+export function assertEnvironmentName(environment: string, options: { allowProduction?: boolean } = {}): void {
+  if (environment === 'production' && !options.allowProduction) {
+    throw new Error('--environment=production を使うには、環境変数 CONSOLE_ALLOW_PRODUCTION=1 の明示が必要です（本番への反映は、代表の許可を得たうえで行います）')
   }
   if (!(KNOWN_ENVIRONMENTS as readonly string[]).includes(environment)) {
     throw new Error(`未知の環境名です: ${environment}（既知: ${KNOWN_ENVIRONMENTS.join(', ')}）`)
@@ -79,7 +88,33 @@ export function evaluateGate(input: GateInput): GateResult {
     return {
       ok: false,
       status: 'refused_database_id',
-      detail: '接続先の database_id が、拒否リスト（本番）と一致します。環境の指定に関わらず拒否します',
+      detail: '接続先の database_id が、拒否リストと一致します。環境の指定に関わらず拒否します',
+    }
+  }
+
+  const isProduction = profile.production === true
+  if (isProduction && environment !== 'production') {
+    return { ok: false, status: 'config_error', detail: `environments.json の ${environment} に production: true が指定されています（production 以外の名前には使えません）` }
+  }
+  if (profile.database_id && config.protected_database_ids.includes(profile.database_id) && !isProduction) {
+    return { ok: false, status: 'config_error', detail: `environments.json の ${environment}.database_id が、本番の database_id です（production プロファイルでのみ指定できます）` }
+  }
+  if (databaseId !== null && config.protected_database_ids.includes(databaseId) && !isProduction) {
+    return {
+      ok: false,
+      status: 'refused_database_id',
+      detail: `接続先は本番の DB です。--environment=${environment} では拒否します（本番は --environment=production のみ。値は表示しません）`,
+    }
+  }
+  if (isProduction) {
+    if (!profile.database_id || !config.protected_database_ids.includes(profile.database_id)) {
+      return { ok: false, status: 'config_error', detail: 'environments.json の production.database_id が、未設定か protected_database_ids に含まれていません' }
+    }
+    if (!profile.project_ref) {
+      return { ok: false, status: 'config_error', detail: 'environments.json の production.project_ref が未設定です（本番では database_id と project_ref の両方が必須）' }
+    }
+    if (profile.require_no_database_id || profile.loopback_only) {
+      return { ok: false, status: 'config_error', detail: 'environments.json の production に、require_no_database_id / loopback_only は指定できません' }
     }
   }
 
